@@ -360,30 +360,201 @@ a:hover {
   color: var(--t-secondary);
 }
 
-@media (max-width: 640px) {
-  .nav__links a {
-    padding: 0 9px;
-  }
+/* Hamburger — mobile only */
+.nav__burger {
+  display: none;
+}
 
-  .nav__links a i {
+@media (max-width: 640px) {
+  .nav__links {
     display: none;
   }
 
   .nav__brand-ver {
     display: none;
   }
+
+  .nav__burger {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 54px;
+    height: 54px;
+    margin-left: auto;
+    padding: 0;
+    background: none;
+    border: none;
+    border-left: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .nav__burger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--t-secondary);
+    transition: background 0.2s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+  }
+
+  .nav__burger:hover span {
+    background: var(--accent);
+  }
+
+  /* Morph to an X when the drawer is open */
+  .nav__burger.is-open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  .nav__burger.is-open span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .nav__burger.is-open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+}
+
+/* ---- Mobile off-screen drawer (<640px) ---- */
+.nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(5, 7, 9, 0.6);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s, visibility 0s linear 0.3s;
+}
+
+.nav-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  width: min(300px, 84vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -14px 0 40px rgba(0, 0, 0, 0.35);
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.menu-open .nav-overlay {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.3s;
+}
+
+body.menu-open .nav-drawer {
+  transform: translateX(0);
+}
+
+.nav-drawer__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-drawer__no {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.nav-drawer__title {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-caption);
+}
+
+.nav-drawer__links {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.nav-drawer__links li {
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-drawer__links a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  color: var(--t-muted);
+  transition: color 0.2s, background 0.2s, padding-left 0.2s;
+}
+
+.nav-drawer__links a i {
+  font-style: normal;
+  font-size: 0.62rem;
+  color: var(--accent);
+}
+
+.nav-drawer__links a:hover {
+  padding-left: 26px;
+  color: var(--t-bright);
+  background: var(--accent-ghost);
+}
+
+.nav-drawer__foot {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-drawer__theme {
+  width: 100%;
+  padding: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-secondary);
+  background: var(--accent-ghost);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.nav-drawer__theme:hover {
+  color: var(--t-bright);
+  background: var(--accent-dim);
 }
 
 /* ============================================================
    HERO — title block on a schematic sheet
    ============================================================ */
 .hero {
+  /* 100svh = small viewport: with the mobile URL bar visible, the hero's
+     coordinate space matches the fixed nav (100vh would be taller, pushing
+     the hero's absolute elements up under the transparent nav) */
   min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   position: relative;
   overflow: hidden;
+  /* Buffer: if content outgrows short viewports (landscape phones),
+     flex-end overflow is clipped from the top — absorb it above the title block */
+  padding-top: 64px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
@@ -809,6 +980,26 @@ a:hover {
   .hero__wire {
     width: 100%;
     opacity: 0.4;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Top-down flow: content grows downward instead of flex-end clipping
+     the title block up into the sheet metadata */
+  .hero {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  /* Corner labels stack on two lines — they overlap at narrow widths */
+  .hero__meta--tr {
+    top: 96px;
+  }
+
+  /* Title block clears both label lines */
+  .hero__block {
+    margin-top: 132px;
+    margin-bottom: 48px;
   }
 }
 
@@ -1520,7 +1711,9 @@ a:hover {
 }
 
 .footer__inner {
-  padding: clamp(56px, 8vh, 84px) 0 40px;
+  /* Horizontal padding comes from .container; only override vertical */
+  padding-top: clamp(56px, 8vh, 84px);
+  padding-bottom: 40px;
 }
 
 .footer__head {
@@ -1604,6 +1797,35 @@ a:hover {
   color: var(--accent);
 }
 
+@media (max-width: 640px) {
+  .footer__inner {
+    padding-top: 48px;
+  }
+
+  /* Motto: shrink to avoid overflow on very narrow screens */
+  .footer__motto {
+    font-size: 1.3rem;
+  }
+
+  /* Nav links: tidy 2-column grid instead of ragged flex wrap */
+  .footer__nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 24px;
+  }
+
+  /* Tech notes: one per line, like a data sheet */
+  .footer__tech {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Sign-off rows: roomier line spacing */
+  .footer__signoff {
+    gap: 14px;
+  }
+}
+
 /* ============================================================
    CUSTOM CURSOR — CAD crosshair (fine pointers only)
    ============================================================ */
@@ -1621,6 +1843,17 @@ a:hover {
 @media (pointer: fine) {
   * {
     cursor: none !important;
+  }
+
+  /* Text-entry controls keep their native caret */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  [contenteditable] {
+    cursor: text !important;
+  }
+
+  select {
+    cursor: auto !important;
   }
 
   .cursor,
@@ -1678,6 +1911,13 @@ body.cursor--active .cursor__reticle {
 }
 
 body.cursor--active .cursor {
+  transform: scale(0.5);
+}
+
+/* Over a text-entry control: hide the crosshair, show the native caret */
+body.cursor--typing .cursor,
+body.cursor--typing .cursor__reticle {
+  opacity: 0;
   transform: scale(0.5);
 }
 
@@ -1978,7 +2218,8 @@ body.cursor--active .cursor {
   align-items: start;
   max-width: var(--max);
   margin: 0 auto;
-  padding: clamp(48px, 8vh, 80px) clamp(20px, 4.5vw, 48px);
+  /* Top padding must clear the 54px fixed nav */
+  padding: clamp(64px, 9vh, 88px) clamp(20px, 4.5vw, 48px);
   min-height: 60vh;
 }
 
@@ -2654,7 +2895,7 @@ a.outline-row:hover {
   }
 
   .post-layout {
-    padding-top: 2rem;
+    padding-top: 64px;
     padding-bottom: 2rem;
   }
 }
