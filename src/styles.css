@@ -952,7 +952,7 @@ a:hover {
 .record__head,
 .record__row {
   display: grid;
-  grid-template-columns: 52px 130px minmax(0, 1fr) minmax(0, 1.6fr) 110px;
+  grid-template-columns: 52px 130px minmax(0, 1fr) 110px;
   gap: 16px;
   align-items: start;
   padding: 18px 14px;
@@ -1068,7 +1068,7 @@ a:hover {
   }
 
   .record__rev {
-    grid-row: span 4;
+    grid-row: span 3;
     width: 48px;
   }
 }
@@ -1465,6 +1465,15 @@ a:hover {
   font-weight: 600;
 }
 
+.matrix__desc {
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: var(--t-muted);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-light);
+}
+
 /* AI directive banner */
 .directive {
   margin-top: 22px;
@@ -1722,35 +1731,15 @@ body.cursor--active .cursor {
   padding: 20px 22px 14px;
 }
 
-.coverage__label {
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+.tag--group {
   color: var(--accent);
-  margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  border-color: var(--accent);
+  background: transparent;
 }
 
 .coverage__row {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.coverage__row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.coverage__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 5px;
+  background: var(--card);
+  padding: 14px 22px;
 }
 
 .coverage__name {
@@ -1760,12 +1749,14 @@ body.cursor--active .cursor {
   letter-spacing: 0.02em;
   color: var(--t-bright);
   line-height: 1.3;
+  margin-bottom: 4px;
 }
 
 .coverage__tags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  margin-top: 8px;
 }
 
 .coverage__desc {
@@ -1773,13 +1764,6 @@ body.cursor--active .cursor {
   line-height: 1.7;
   color: var(--t-secondary);
   max-width: 720px;
-}
-
-@media (max-width: 600px) {
-  .coverage__head {
-    flex-direction: column;
-    gap: 8px;
-  }
 }
 
 /* ============================================================
@@ -2473,6 +2457,33 @@ a.outline-row:hover {
 
 .about-intro p + p {
   margin-top: 0.8rem;
+}
+
+.battles__principles {
+  margin-top: 18px;
+  margin-bottom: clamp(28px, 4vh, 44px);
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.battles__principles-heading {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.battles__principles-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .about-principles {
