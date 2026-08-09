@@ -29,6 +29,9 @@ jobs:
 
       - run: npm run build
 
+      - name: 禁用 Jekyll 二次处理
+        run: touch _site/.nojekyll
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
