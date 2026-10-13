@@ -3444,3 +3444,102 @@ a.outline-row:hover {
     flex-direction: column;
   }
 }
+
+/* ============================================================
+   LIGHTBOX — 图片预览（点击正文图片放大；←/→ 切换；Esc/点背景关闭）
+   ============================================================ */
+
+/* 正文图片不许超出内容列（相册/小组话题的原图常有一两千像素宽） */
+.post-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 48px);
+  background: rgba(11, 13, 16, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.lightbox[hidden] {
+  display: none;
+}
+
+.lightbox__figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.lightbox__img {
+  display: block;
+  max-width: min(92vw, 1600px);
+  max-height: 80vh;
+  border: 1px solid var(--border-light);
+  background: var(--card);
+}
+
+.lightbox__bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-caption);
+}
+
+.lightbox__count {
+  color: var(--accent);
+  min-width: 4ch;
+  text-align: center;
+}
+
+.lightbox__btn {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.lightbox__btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-ghost);
+}
+
+.lightbox__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lightbox__close {
+  position: absolute;
+  top: clamp(14px, 3vw, 28px);
+  right: clamp(14px, 3vw, 28px);
+}
+
+@media (max-width: 640px) {
+  .lightbox__hint {
+    display: none;
+  }
+}
