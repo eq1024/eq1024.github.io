@@ -3183,9 +3183,15 @@ a.outline-row:hover {
 /* 作品档案页：左封面右档案 */
 .arch-item {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  /* 默认单列：没有封面时（日记/豆列/小组话题）正文占满整行 */
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(28px, 4vw, 60px);
   align-items: start;
+}
+
+/* 只有真的有封面时才留出左栏 */
+.arch-item--media {
+  grid-template-columns: 300px minmax(0, 1fr);
 }
 
 .arch-item__cover {

@@ -19,7 +19,7 @@ layout: base.njk
       <span class="sec__rule" aria-hidden="true"></span>
     </div>
 
-    <div class="arch-item{% if douban_kind == 'mark' %} arch-item--mark{% endif %}">
+    <div class="arch-item{% if douban_cover %} arch-item--media{% endif %}{% if douban_kind == 'mark' %} arch-item--mark{% endif %}">
       {% if douban_cover %}
       <div class="arch-item__cover">
         <img src="{{ douban_cover }}" alt="{{ title }}">
