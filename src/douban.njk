@@ -1,0 +1,131 @@
+---
+layout: base.njk
+title: 豆瓣存档
+---
+{% set stats = collections.archiveStats %}
+<div class="page-content container">
+  <div class="sec__inner">
+    <div class="sec__head">
+      <span class="sec__no">05</span>
+      <span class="sec__name">Field Archive</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+
+    <h1 class="page-heading">豆瓣存档 — <em>Twelve Years, On File</em></h1>
+
+    <p class="arch-lead">
+      {% if stats.firstYear %}{{ stats.firstYear }} – {{ stats.lastYear }}，{% endif %}
+      从豆瓣搬回家的个人记录：<em>{{ stats.marks }} 条标记</em>{% if stats.notes %}、{{ stats.notes }} 篇日记{% endif %}{% if stats.doulists %}、{{ stats.doulists }} 份豆列{% endif %}{% if stats.albums %}、{{ stats.albums }} 个相册{% endif %}{% if stats.groupTopics %}、{{ stats.groupTopics }} 篇小组话题{% endif %}，全部落在本地，离线可读。
+    </p>
+
+    <div class="arch-stats">
+      <div class="arch-stat"><b>{{ stats.marks }}</b><span>Marks / 标记</span></div>
+      {% for medium in ['movie', 'book', 'game', 'music', 'drama'] %}
+      {% if stats.byMedium[medium] %}
+      <div class="arch-stat"><b>{{ stats.byMedium[medium].total }}</b><span>{{ medium | upper }} / {{ medium | mediumName }}</span></div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if stats.recentCovered.length %}
+    <ul class="arch-strip" aria-label="最近的收藏">
+      {% for m in stats.recentCovered %}
+      <li><a href="{{ m.url }}"><img src="{{ m.cover }}" alt="{{ m.title }}" loading="lazy" decoding="async"></a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <p class="sec__more">
+      <a class="btn" href="/douban/movie/">浏览影视 →</a>
+      <a class="btn btn--primary" href="/douban/search/">搜索 {{ stats.marks }} 条记录</a>
+    </p>
+
+    {% if collections.doubanNotes.length %}
+    <div class="sec__head" style="margin-top: clamp(36px, 5vh, 56px);">
+      <span class="sec__no">05.3</span>
+      <span class="sec__name">Diary · 日记</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+    <ul class="post-list">
+      {% for n in collections.doubanNotes %}
+      <li>
+        <a href="{{ n.url }}" class="post-item">
+          <h2 class="post-item-title">{{ n.title }}</h2>
+          {% if n.excerpt and n.excerpt.length > 8 %}<p class="post-item-desc">{{ n.excerpt }}</p>{% endif %}
+          <div class="post-item-meta">{% if n.date %}<time>{{ n.date }}</time>{% endif %}</div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if collections.doubanDoulists.length %}
+    <div class="sec__head" style="margin-top: clamp(36px, 5vh, 56px);">
+      <span class="sec__no">05.4</span>
+      <span class="sec__name">Doulists · 豆列</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+    <ul class="post-list">
+      {% for d in collections.doubanDoulists %}
+      <li>
+        <a href="{{ d.url }}" class="post-item">
+          <h2 class="post-item-title">{{ d.title }}</h2>
+          <div class="post-item-meta">
+            {% if d.count != null %}<span class="tag">{{ d.count }} 条目</span>{% endif %}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if collections.doubanAlbums.length %}
+    <div class="sec__head" style="margin-top: clamp(36px, 5vh, 56px);">
+      <span class="sec__no">05.5</span>
+      <span class="sec__name">Photo Sets · 相册</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+    <ul class="post-list">
+      {% for a in collections.doubanAlbums %}
+      <li>
+        <a href="{{ a.url }}" class="post-item">
+          <h2 class="post-item-title">{{ a.title }}</h2>
+          <div class="post-item-meta">{% if a.excerpt %}<span>{{ a.excerpt }}</span>{% endif %}</div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if collections.doubanGroupTopics.length %}
+    <div class="sec__head" style="margin-top: clamp(36px, 5vh, 56px);">
+      <span class="sec__no">05.6</span>
+      <span class="sec__name">Group Posts · 小组话题</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+    <ul class="post-list">
+      {% for t in collections.doubanGroupTopics %}
+      <li>
+        <a href="{{ t.url }}" class="post-item">
+          <h2 class="post-item-title">{{ t.title }}</h2>
+          <div class="post-item-meta">
+            {% if t.group %}<span class="tag">{{ t.group }}</span>{% endif %}
+            {% if t.date %}<time>{{ t.date }}</time>{% endif %}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if stats.groupJoins %}
+    <p class="sec__more" style="margin-top: clamp(30px, 4vh, 44px);">
+      <a class="btn" href="/douban/group/joins/">加入的小组（{{ stats.groupJoins }}）→</a>
+    </p>
+    {% endif %}
+
+    <p class="arch-stats__note" style="margin-top: clamp(36px, 5vh, 56px);">
+      数据来自本地豆瓣档案 · 与豆瓣网无关 · 页面打开零外部请求
+    </p>
+  </div>
+</div>

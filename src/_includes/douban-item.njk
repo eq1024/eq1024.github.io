@@ -1,0 +1,75 @@
+---
+layout: base.njk
+---
+{% if douban_kind == 'mark' %}{% set headNo = '05.2' %}{% set headName = 'Subject File' %}
+{% elif douban_kind == 'note' %}{% set headNo = '05.3' %}{% set headName = 'Field Note' %}
+{% elif douban_kind == 'review' %}{% set headNo = '05.3' %}{% set headName = 'Field Review' %}
+{% elif douban_kind == 'doulist' %}{% set headNo = '05.4' %}{% set headName = 'Doulist' %}
+{% elif douban_kind == 'album' %}{% set headNo = '05.5' %}{% set headName = 'Photo Set' %}
+{% elif douban_kind == 'group_topic' %}{% set headNo = '05.6' %}{% set headName = 'Group Post' %}
+{% elif douban_kind == 'group_joins' %}{% set headNo = '05.7' %}{% set headName = 'Groups' %}
+{% else %}{% set headNo = '05' %}{% set headName = 'Archive' %}
+{% endif %}
+
+<div class="page-content container">
+  <div class="sec__inner">
+    <div class="sec__head">
+      <span class="sec__no">{{ headNo }}</span>
+      <span class="sec__name">{{ headName }}</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+
+    <div class="arch-item{% if douban_kind == 'mark' %} arch-item--mark{% endif %}">
+      {% if douban_cover %}
+      <div class="arch-item__cover">
+        <img src="{{ douban_cover }}" alt="{{ title }}">
+      </div>
+      {% endif %}
+
+      <div class="arch-item__main">
+        <div class="arch-item__stamps">
+          {% if douban_kind == 'mark' %}
+          <span class="arch-stamp{% if douban_status == 'done' %} arch-stamp--done{% endif %}">
+            {%- if douban_status == 'done' %}■{% elif douban_status == 'doing' %}▶{% else %}◇{% endif %} {{ douban_verb }}
+          </span>
+          {% if douban_rating %}
+          <span class="arch-rate" aria-label="{{ douban_rating }} 星">{% for i in [1, 2, 3, 4, 5] %}<i{% if i > douban_rating %} class="is-off"{% endif %}></i>{% endfor %}</span>
+          {% endif %}
+          <span class="arch-stamp arch-stamp--ghost">REV {{ douban_revisions }}</span>
+          {% if douban_last_seen %}<span class="arch-stamp arch-stamp--ghost">LAST SEEN {{ douban_last_seen | dateOnly }}</span>{% endif %}
+          {% elif douban_kind == 'note' or douban_kind == 'review' %}
+          {% if douban_visibility == 'private' %}<span class="arch-stamp">PRIVATE</span>{% endif %}
+          {% if douban_published_at_raw %}<span class="arch-stamp arch-stamp--ghost">{{ douban_published_at_raw }}</span>{% endif %}
+          {% if douban_location %}<span class="arch-stamp arch-stamp--ghost">{{ douban_location }}</span>{% endif %}
+          {% elif douban_kind == 'doulist' %}
+          {% if douban_private %}<span class="arch-stamp">PRIVATE</span>{% endif %}
+          <span class="arch-stamp arch-stamp--ghost">{{ douban_item_count }} ITEMS</span>
+          {% elif douban_kind == 'album' %}
+          {% if douban_private %}<span class="arch-stamp">PRIVATE</span>{% endif %}
+          {% if douban_photo_count %}<span class="arch-stamp arch-stamp--ghost">{{ douban_photo_count }} PHOTOS</span>{% endif %}
+          {% elif douban_kind == 'group_topic' %}
+          {% if douban_group_name %}<span class="arch-stamp arch-stamp--ghost">{{ douban_group_name }}</span>{% endif %}
+          {% if douban_published_at_raw %}<span class="arch-stamp arch-stamp--ghost">{{ douban_published_at_raw }}</span>{% endif %}
+          {% endif %}
+        </div>
+
+        <h1>{{ title }}</h1>
+
+        <p class="arch-item__alias">
+          {% if douban_aliases and douban_aliases.length %}ALIAS — {{ douban_aliases | join(' · ') }} · {% endif %}
+          {% if douban_url %}<a href="{{ douban_url }}" rel="noreferrer noopener" target="_blank">豆瓣原页 ↗</a>{% endif %}
+        </p>
+
+        <div class="post-content prose arch-item__body">
+          {{ content | safe }}
+        </div>
+
+        <p class="arch-item__source">
+          <span>LOCAL ARCHIVE · 本地档案，与豆瓣网无关</span>
+          {% if douban_marked_at_raw %}<span>标记于 {{ douban_marked_at_raw }}</span>{% endif %}
+          {% if douban_kind == 'note' and douban_restricted_by == 'platform' %}<span>这篇日记被豆瓣锁定 · 原文照登</span>{% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

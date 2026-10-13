@@ -304,3 +304,45 @@ title: EQ1024 · Frontend Engineer — V2.0
     </div>
   </div>
 </section>
+
+<!-- ===================== 05 DOUBAN ARCHIVE ===================== -->
+{% set stats = collections.archiveStats %}
+{% if stats and stats.marks %}
+<section class="sec" id="archive">
+  <div class="container sec__inner">
+    <div class="sec__head reveal">
+      <span class="sec__no">05</span>
+      <span class="sec__name">Field Archive</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+
+    <h2 class="sec__title reveal r1">豆瓣存档 — <em>Twelve Years, On File</em></h2>
+
+    <p class="arch-lead reveal r2">
+      {% if stats.firstYear %}{{ stats.firstYear }} – {{ stats.lastYear }}，{% endif %}{{ stats.marks }} 条标记与日记、豆列、相册，全部落在本地，与豆瓣网无关。
+    </p>
+
+    <div class="arch-stats reveal r2">
+      <div class="arch-stat"><b>{{ stats.marks }}</b><span>Marks / 标记</span></div>
+      {% for medium in ['movie', 'book', 'game', 'music', 'drama'] %}
+      {% if stats.byMedium[medium] %}
+      <div class="arch-stat"><b>{{ stats.byMedium[medium].total }}</b><span>{{ medium | upper }} / {{ medium | mediumName }}</span></div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if stats.recentCovered.length %}
+    <ul class="arch-strip reveal r3" aria-label="最近的收藏">
+      {% for m in stats.recentCovered %}
+      <li><a href="{{ m.url }}"><img src="{{ m.cover }}" alt="{{ m.title }}" loading="lazy" decoding="async"></a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <p class="sec__more reveal r3">
+      <a href="/douban/" class="btn">进入存档 →</a>
+      <a href="/douban/search/" class="btn btn--primary">搜索 {{ stats.marks }} 条记录</a>
+    </p>
+  </div>
+</section>
+{% endif %}

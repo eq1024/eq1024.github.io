@@ -1,3 +1,4 @@
+const fs = require("fs");
 const markdownItAnchor = require("markdown-it-anchor");
 
 module.exports = function (eleventyConfig) {
@@ -9,6 +10,9 @@ module.exports = function (eleventyConfig) {
   // Favicon、图标和 PWA assets
   eleventyConfig.addPassthroughCopy("src/*.{png,ico,json}");
   eleventyConfig.addPassthroughCopy("src/og-image.png");
+
+  // 豆瓣存档的图片与搜索索引（由 scripts/sync-douban.mjs 同步进 src/douban-assets/）
+  eleventyConfig.addPassthroughCopy("src/douban-assets");
 
   // 复制 Prism.js 资源
   eleventyConfig.addPassthroughCopy({
@@ -159,6 +163,158 @@ module.exports = function (eleventyConfig) {
     const html = renderTree(tree);
     return `<div class="outline-box">目录</div>\n${html}`;
   });
+
+  // ============================================================
+  // 豆瓣存档（内容由 scripts/sync-douban.mjs 同步进 src/douban/）
+  // ============================================================
+  const MEDIUM_NAMES = { movie: '影视', book: '图书', game: '游戏', music: '音乐', drama: '舞台剧' };
+  const MEDIUM_ORDER = ['movie', 'book', 'game', 'music', 'drama'];
+  const STATUS_ORDER = ['wish', 'doing', 'done'];
+  const VERB = {
+    movie: { wish: '想看', doing: '在看', done: '看过' },
+    book: { wish: '想读', doing: '在读', done: '读过' },
+    music: { wish: '想听', doing: '在听', done: '听过' },
+    game: { wish: '想玩', doing: '在玩', done: '玩过' },
+    drama: { wish: '想看', doing: '在看', done: '看过' },
+  };
+
+  eleventyConfig.addFilter('mediumName', (medium) => MEDIUM_NAMES[medium] ?? medium);
+  eleventyConfig.addFilter('statusVerb', (status, medium) => VERB[medium]?.[status] ?? status);
+
+  /** YAML 会把裸日期解析成 Date 对象；这里统一还原成 YYYY-MM-DD 文本。 */
+  const dateText = (value) => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    }
+    return typeof value === 'string' ? value : '';
+  };
+  eleventyConfig.addFilter('dateOnly', (value) => dateText(value).slice(0, 10));
+
+  /** 正文第一段（跳过「作品信息」这类小节与表格），用作列表摘要。 */
+  const firstParagraph = (inputPath) => {
+    try {
+      const text = fs.readFileSync(inputPath, 'utf-8').replace(/^---\n[\s\S]*?\n---\n?/, '');
+      const para = text
+        .trim()
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .find((p) => p && !p.startsWith('#') && !p.startsWith('|')) ?? '';
+      return para
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/[#>*_`]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 90);
+    } catch {
+      return '';
+    }
+  };
+
+  let doubanMarksCache = null;
+  const allMarks = (collectionApi) => {
+    if (doubanMarksCache) return doubanMarksCache;
+    doubanMarksCache = collectionApi
+      .getAll()
+      .filter((item) => item.data?.douban_kind === 'mark')
+      .map((item) => {
+        const d = item.data;
+        return {
+          url: item.url,
+          title: d.title,
+          medium: d.douban_medium,
+          mediumName: MEDIUM_NAMES[d.douban_medium] ?? d.douban_medium,
+          status: d.douban_status,
+          verb: d.douban_verb ?? VERB[d.douban_medium]?.[d.douban_status] ?? '',
+          rating: d.douban_rating ?? null,
+          cover: d.douban_cover ?? null,
+          aliases: d.douban_aliases ?? [],
+          tags: d.douban_tags ?? [],
+          deleted: Boolean(d.douban_upstream_deleted),
+          dateRaw: dateText(d.douban_marked_at_raw),
+          excerpt: firstParagraph(item.inputPath),
+        };
+      })
+      .sort((a, b) => (String(a.dateRaw) < String(b.dateRaw) ? 1 : -1));
+    return doubanMarksCache;
+  };
+
+  eleventyConfig.addCollection('doubanMarks', (api) => allMarks(api));
+
+  /** 浏览页分桶：每个媒介 × 状态 × 分页各一页。 */
+  eleventyConfig.addCollection('doubanBrowse', (api) => {
+    const marks = allMarks(api);
+    const PAGE = 96;
+    const buckets = [];
+    for (const medium of MEDIUM_ORDER) {
+      const list = marks.filter((m) => m.medium === medium);
+      if (!list.length) continue;
+      const counts = { all: list.length };
+      for (const status of STATUS_ORDER) counts[status] = list.filter((m) => m.status === status).length;
+      for (const status of [null, ...STATUS_ORDER]) {
+        const items = status ? list.filter((m) => m.status === status) : list;
+        if (!items.length) continue;
+        const pages = Math.ceil(items.length / PAGE);
+        const base = `/douban/${medium}/${status ? `${status}/` : ''}`;
+        for (let page = 1; page <= pages; page += 1) {
+          buckets.push({
+            medium,
+            mediumName: MEDIUM_NAMES[medium] ?? medium,
+            status,
+            statusVerb: status ? VERB[medium][status] : '全部',
+            counts,
+            total: items.length,
+            page,
+            pages,
+            baseUrl: base,
+            url: page === 1 ? base : `${base}page/${page}/`,
+            items: items.slice((page - 1) * PAGE, page * PAGE),
+          });
+        }
+      }
+    }
+    return buckets;
+  });
+
+  eleventyConfig.addCollection('archiveStats', (api) => {
+    const marks = allMarks(api);
+    const byMedium = {};
+    for (const m of marks) {
+      if (!byMedium[m.medium]) byMedium[m.medium] = { total: 0, wish: 0, doing: 0, done: 0 };
+      byMedium[m.medium].total += 1;
+      if (byMedium[m.medium][m.status] != null) byMedium[m.medium][m.status] += 1;
+    }
+    const count = (kind) => api.getAll().filter((i) => i.data?.douban_kind === kind).length;
+    const dates = marks.map((m) => m.dateRaw).filter(Boolean).sort();
+    return {
+      marks: marks.length,
+      byMedium,
+      firstYear: dates[0]?.slice(0, 4) ?? null,
+      lastYear: dates[dates.length - 1]?.slice(0, 4) ?? null,
+      notes: count('note'),
+      doulists: count('doulist'),
+      albums: count('album'),
+      groupTopics: count('group_topic'),
+      groupJoins: count('group_joins'),
+      recentCovered: marks.filter((m) => m.cover).slice(0, 12),
+    };
+  });
+
+  const shapePage = (item) => ({
+    url: item.url,
+    title: item.data.title,
+    date: dateText(item.data.douban_published_at_raw) || dateText(item.data.date).slice(0, 10),
+    excerpt: firstParagraph(item.inputPath),
+    cover: item.data.douban_cover ?? null,
+    count: item.data.douban_item_count ?? null,
+    group: item.data.douban_group_name ?? null,
+  });
+  const doubanPages = (api, kind) => api.getAll().filter((i) => i.data?.douban_kind === kind).map(shapePage);
+  eleventyConfig.addCollection('doubanNotes', (api) => doubanPages(api, 'note'));
+  eleventyConfig.addCollection('doubanDoulists', (api) => doubanPages(api, 'doulist'));
+  eleventyConfig.addCollection('doubanAlbums', (api) => doubanPages(api, 'album'));
+  eleventyConfig.addCollection('doubanGroupTopics', (api) => doubanPages(api, 'group_topic'));
 
   return {
     dir: {

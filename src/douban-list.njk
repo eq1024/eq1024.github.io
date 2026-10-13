@@ -1,0 +1,87 @@
+---
+layout: base.njk
+pagination:
+  data: collections.doubanBrowse
+  size: 1
+  alias: bucket
+permalink: "{{ bucket.url }}"
+eleventyExcludeFromCollections: true
+renderData:
+  title: "{{ bucket.mediumName }} · {{ bucket.statusVerb }} — 豆瓣存档"
+---
+{% set stats = collections.archiveStats %}
+<div class="page-content container">
+  <div class="sec__inner">
+    <div class="sec__head">
+      <span class="sec__no">05.1</span>
+      <span class="sec__name">Archive Ledger</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+
+    <h1 class="page-heading">{{ bucket.mediumName }} · {{ bucket.statusVerb }} <em>{{ bucket.total }} 条</em></h1>
+
+    <div class="arch-toolbar">
+      <nav class="arch-tabs" aria-label="按媒介">
+        {% for medium in ['movie', 'book', 'game', 'music', 'drama'] %}
+        {% if stats.byMedium[medium] %}
+        <a class="arch-chip{% if medium == bucket.medium %} is-on{% endif %}" href="/douban/{{ medium }}/">{{ medium | mediumName }} <i>{{ stats.byMedium[medium].total }}</i></a>
+        {% endif %}
+        {% endfor %}
+      </nav>
+      <nav class="arch-tabs" aria-label="按状态">
+        <a class="arch-chip{% if not bucket.status %} is-on{% endif %}" href="/douban/{{ bucket.medium }}/">全部 <i>{{ bucket.counts.all }}</i></a>
+        {% for status in ['wish', 'doing', 'done'] %}
+        {% if bucket.counts[status] %}
+        <a class="arch-chip{% if bucket.status == status %} is-on{% endif %}" href="/douban/{{ bucket.medium }}/{{ status }}/">{{ status | statusVerb(bucket.medium) }} <i>{{ bucket.counts[status] }}</i></a>
+        {% endif %}
+        {% endfor %}
+      </nav>
+      <a class="arch-chip" href="/douban/search/">搜索</a>
+    </div>
+
+    <div class="arch-grid">
+      {% for m in bucket.items %}
+      <a class="arch-card" href="{{ m.url }}">
+        {% if m.cover %}<span class="arch-card__cover"><img src="{{ m.cover }}" alt="{{ m.title }}" loading="lazy" decoding="async"></span>{% endif %}
+        <span class="arch-card__body">
+          <span class="arch-card__line">
+            <span class="arch-st arch-st--{{ m.status }}"><i>{% if m.status == 'done' %}■{% elif m.status == 'doing' %}▶{% else %}◇{% endif %}</i> {{ m.verb }}</span>
+            {% if m.rating %}<span class="arch-rate" aria-label="{{ m.rating }} 星">{% for i in [1, 2, 3, 4, 5] %}<i{% if i > m.rating %} class="is-off"{% endif %}></i>{% endfor %}</span>{% endif %}
+          </span>
+          <span class="arch-card__title">{{ m.title }}</span>
+          {% if m.excerpt %}<span class="arch-card__desc">{{ m.excerpt }}</span>{% endif %}
+          <span class="arch-card__meta">{{ m.dateRaw }} · {{ m.medium }}</span>
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+
+    {% if bucket.pages > 1 %}
+    <nav class="pagination" aria-label="分页导航">
+      <div class="pagination__inner">
+        {% if bucket.page > 1 %}
+        <a class="pagination__btn pagination__btn--prev" href="{{ bucket.baseUrl }}{% if bucket.page > 2 %}page/{{ bucket.page - 1 }}/{% endif %}">← 上一页</a>
+        {% else %}
+        <span class="pagination__btn pagination__btn--prev pagination__btn--disabled">← 上一页</span>
+        {% endif %}
+
+        <span class="pagination__info">
+          {% for p in range(1, bucket.pages + 1) %}
+          {% if p == bucket.page %}
+          <span class="pagination__num pagination__num--active">{{ p }}</span>
+          {% else %}
+          <a class="pagination__num" href="{{ bucket.baseUrl }}{% if p > 1 %}page/{{ p }}/{% endif %}">{{ p }}</a>
+          {% endif %}
+          {% endfor %}
+        </span>
+
+        {% if bucket.page < bucket.pages %}
+        <a class="pagination__btn pagination__btn--next" href="{{ bucket.baseUrl }}page/{{ bucket.page + 1 }}/">下一页 →</a>
+        {% else %}
+        <span class="pagination__btn pagination__btn--next pagination__btn--disabled">下一页 →</span>
+        {% endif %}
+      </div>
+    </nav>
+    {% endif %}
+  </div>
+</div>

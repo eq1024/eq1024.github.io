@@ -1,0 +1,118 @@
+---
+layout: base.njk
+title: 搜索存档
+permalink: /douban/search/
+---
+<div class="page-content container">
+  <div class="sec__inner">
+    <div class="sec__head">
+      <span class="sec__no">05.9</span>
+      <span class="sec__name">Full Scan</span>
+      <span class="sec__rule" aria-hidden="true"></span>
+    </div>
+
+    <h1 class="page-heading">搜索存档 — <em>Full Scan</em></h1>
+
+    <form class="arch-search-form" id="as-form" role="search">
+      <input class="arch-search-input" id="as-q" type="search" name="q" autocomplete="off"
+             placeholder="搜标题、短评、日记、小组话题的原文…" aria-label="搜索关键字">
+      <button class="btn btn--primary" type="submit">搜索</button>
+    </form>
+
+    <p class="arch-search-meta" id="as-meta">正在载入索引…</p>
+    <ul class="arch-hits" id="as-hits"></ul>
+  </div>
+</div>
+
+<script src="/douban-assets/search-index.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('as-form');
+  var input = document.getElementById('as-q');
+  var meta = document.getElementById('as-meta');
+  var hits = document.getElementById('as-hits');
+  if (!form || !input || !meta || !hits) return;
+
+  var rows = window.DOUBAK_SEARCH;
+  if (!Array.isArray(rows)) {
+    meta.textContent = '索引没有加载成功——刷新重试，或稍后再来。';
+    return;
+  }
+  meta.textContent = rows.length + ' 条记录 · 本地全文扫描，即输即得';
+
+  var TYPE = { m: '标记', b: '广播', l: '长文', d: '豆列', a: '相册', g: '小组' };
+  var LIMIT = 200;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function hl(text, q) {
+    var safe = esc(text);
+    var i = safe.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return safe;
+    return safe.slice(0, i) + '<mark>' + safe.slice(i, i + q.length) + '</mark>' + safe.slice(i + q.length);
+  }
+
+  function snippet(text, q) {
+    var i = text.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return text.slice(0, 100);
+    var start = Math.max(0, i - 40);
+    var end = Math.min(text.length, i + 60);
+    return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+  }
+
+  function run(q) {
+    hits.innerHTML = '';
+    if (!q) {
+      meta.textContent = rows.length + ' 条记录 · 本地全文扫描，即输即得';
+      return;
+    }
+    var lower = q.toLowerCase();
+    var found = [];
+    for (var i = 0; i < rows.length && found.length < LIMIT; i++) {
+      var r = rows[i];
+      var hay = [r.n || '', (r.a || []).join(' '), r.w || '', r.c || '', r.d || ''].join(' ').toLowerCase();
+      if (hay.indexOf(lower) >= 0) found.push(r);
+    }
+    meta.textContent = found.length ? '命中 ' + found.length + ' 条' + (found.length >= LIMIT ? '（只显示前 ' + LIMIT + ' 条）' : '') : '没有找到相关记录。';
+    if (!found.length) {
+      hits.innerHTML = '<li class="arch-empty">没有找到与「' + esc(q) + '」相关的记录。换个词试试？</li>';
+      return;
+    }
+    var html = '';
+    for (var j = 0; j < found.length; j++) {
+      var it = found[j];
+      var url = '/douban/' + it.u + '/';
+      var title = it.n ? hl(it.n, q) : '(无标题)';
+      var text = it.c ? hl(snippet(it.c, q), q) : '';
+      html += '<li class="arch-hit"><a class="arch-hit__title" href="' + esc(url) + '">' + title + '</a>'
+        + '<p class="arch-hit__meta">' + (TYPE[it.t] || it.t) + (it.d ? ' · ' + esc(it.d) : '')
+        + (it.a && it.a.length ? ' · ' + esc(it.a.join(' / ')) : '') + '</p>'
+        + (text ? '<p class="arch-hit__text">' + text + '</p>' : '')
+        + '</li>';
+    }
+    hits.innerHTML = html;
+  }
+
+  var timer = null;
+  input.addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { run(input.value.trim()); }, 120);
+  });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var q = input.value.trim();
+    history.replaceState(null, '', q ? '?q=' + encodeURIComponent(q) : location.pathname);
+    run(q);
+  });
+
+  var m = /[?&]q=([^&]*)/.exec(location.search);
+  if (m) {
+    input.value = decodeURIComponent(m[1].replace(/\+/g, ' '));
+    run(input.value.trim());
+  }
+})();
+</script>

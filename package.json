@@ -6,7 +6,8 @@
     "build:fonts": "node scripts/build-fonts.js",
     "dev": "npm run build:fonts && npx @11ty/eleventy --serve --watch",
     "build": "npm run clean && npm run build:fonts && npx @11ty/eleventy",
-    "clean": "rm -rf _site"
+    "clean": "node -e \"require('fs').rmSync('_site',{recursive:true,force:true})\"",
+    "douban:sync": "node scripts/sync-douban.mjs"
   },
   "keywords": [
     "blog",

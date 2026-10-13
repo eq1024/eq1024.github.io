@@ -1,0 +1,4 @@
+{
+  "layout": "douban-item.njk",
+  "templateEngineOverride": "md"
+}

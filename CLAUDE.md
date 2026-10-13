@@ -154,6 +154,14 @@ The homepage (`index.njk`) is a single-page layout with these sections:
 | `src/scripts/hero-wireframe.js` | 4D hypercube canvas renderer |
 | `TODO.md` | Prioritized task list from site audit |
 
+### 豆瓣存档（Douban Archive）
+
+- 内容由 `scripts/sync-douban.mjs` 从 doubak 生成器的 Markdown 产物同步进 `src/douban/`（**生成内容，勿手改**，重新同步即覆盖）+ `src/douban-assets/`（封面/上传图/搜索索引，passthrough 发布）。
+- 命令：`npm run douban:sync -- --from <md 目录>` 或 `npm run douban:sync -- --canonical <目录> --bundle <目录>`（生成器默认取同级 `../doubak-site-generator`）。
+- 模板：`src/douban.njk`（存档首页）、`src/douban-list.njk`（媒介×状态×分页，数据来自 `collections.doubanBrowse`）、`src/douban-search.njk`（本地全文扫描）、`src/_includes/douban-item.njk`（条目页，按 `douban_kind` 分支）。
+- `.eleventy.js` 里新增：`doubanMarks` / `doubanBrowse` / `archiveStats` / `doubanNotes` / `doubanDoulists` / `doubanAlbums` / `doubanGroupTopics` 集合，`mediumName` / `statusVerb` / `dateOnly` 过滤器，`src/douban-assets` passthrough。
+- 样式在 `styles.css` 末尾的 `DOUBAN ARCHIVE — Field Archive` 段落；评分是五枚直角方块（未评分不画空块），状态用文字符号 ◇/▶/■。
+
 ## Development Notes
 
 - **Adding a blog post:** Create a `.md` file in `src/blog/` with front matter: `title`, `date`, `description`, `tags` (array), and optionally `outline: true`. The `posts` tag is applied automatically.
