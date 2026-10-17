@@ -1,379 +1,173 @@
 ---
-title: "移动Web前端的疑难杂症整理"
+title: 移动端适配，别再从 rem 和 1px 开始背
 date: 2022-03-01
-description: "移动web页面多端屏幕适配 逻辑像素（logical pixel） CSS像素就是逻辑像素，CSS像素是Web编程的概念,在普通屏幕下，1个CSS像素对应1个物理像素(1:1)。 逻辑像素 ≈ 设备独立像素。 设备像素比 (device pixel ratio) 设备像素比 = "
+description: 从 viewport、DPR、安全区、软键盘、bfcache 和事件模型出发，重新整理移动端 Web 的常见问题。
 tags:
   - CSS
   - 浏览器
+outline: true
 ---
 
-### 移动web页面多端屏幕适配
+移动端适配的文章很容易写成一份“代码片段合集”：
 
-> **逻辑像素（logical pixel）**
->
-> CSS像素就是逻辑像素，CSS像素是Web编程的概念,**在普通屏幕下，1个CSS像素对应1个物理像素(1:1)。**
->
-> **逻辑像素 ≈ 设备独立像素。**
->
-> **设备像素比 (device pixel ratio)**
->
-> 设备像素比 = 设备像素 / 设备独立像素
->
-> iphone5 为例： 640X1136 / 320X568 = 2
-
-#### 自适应（Adaptive）方案
-
-> 应对在浏览器的宽度变化不调整网页元素的位置，缩放网页元素，以适应在可用空间。
->
-> 优点：实现简单，针对移动端进行适配，独立维护。
->
-> 缺点：多端的操作可能没有一致性，无法聚集多端的SEO权重。
-
-使用rem单位，固定页面宽度居中自适应。
-
-以iphone6为基准，设计稿是750px。
-
-设计稿宽度／100 = 7.5 把1rem=100px转换，比值是7.5。
-
-也就是 设计稿宽度与rem的比值是7.5。
-
-320px ／7.5 = 42.6666（html的font-size值）
-
-写出不同设备媒体查询font-size值。
-
-```css
-@media only screen and (min-width: 320px) {
-    html {
-        font-size: 42.6666px
-    }
-}
-
-...
+```text
+设置 viewport
+用 rem
+用 transform 画 1px
+加 safe-area
 ```
 
-设计稿元素高宽／100 就得出元素的高宽rem。
+这些片段都有用，但如果不理解背后的布局视口、设备像素和浏览器行为，换个机型就会继续踩坑。
 
-```css
-div {
-    height: 100px;
-    width: 100px;
-}
+## 先理解 viewport
 
-/*转rem*/
-
-div {
-    height: 1rem;
-    width: 1rem;
-}
-```
-
-**使用rem或者em单位的性能略低于px。（原因是px是绝对单位，rem与em是相对单位）**
-
-**使用rem与em单位效果是差不多，唯一的区别是rem是根据html标签的字体大小,em是根据相对当前元素（或者是父元素）的字体大小。**
-
-延伸：
-
-rem 与 em 转化 px 单位计算。
-
-```css
-/* rem */
-html {
-    font-size: 16px;
-}
-div {
-    width: 10rem;  /* 16px*10 = 160px; */
-    height: 10rem; /* 16px*10 = 160px; */
-}
-
-/* em */
-.header {
-    font-size: 16px;
-    width: 100%;
-    height: 10em;  /* 16px*10=160px; */
-}
-```
-
-#### 响应式（Responsive）方案
-
-> 应对在浏览器的宽度变化通过调整网页元素的位置，以适应在可用空间。
->
-> 优点：实现简单，完美适配各种不同屏幕的，多端的操作一致性，可以聚集多端的SEO权重。
->
-> 缺点：代码量大，不易于维护与调试。
-
-1. 使用CSS媒体查询。
-
-html
+移动浏览器默认会用一个较宽的布局视口来渲染页面，再缩放到屏幕宽度。常见做法是：
 
 ```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 ```
 
-***媒体查询一定要设置meta viewport。***
+`width=device-width` 让布局视口接近设备宽度。`viewport-fit=cover` 则让页面延伸到刘海屏的安全区。
 
-css
+不要随手加 `user-scalable=no` 或 `maximum-scale=1`。它会破坏用户缩放，影响可访问性。
+
+## CSS 像素不等于物理像素
+
+`devicePixelRatio` 表示一个 CSS 像素对应多少个物理像素。
+
+在 2x 屏幕上，1 个 CSS 像素可能对应 2×2 个物理像素。图片、边框和 canvas 的清晰度问题通常来自这里。
+
+但不要把 DPR 当成设备型号判断。浏览器缩放、系统缩放和不同浏览器实现都会影响实际值。
+
+## 响应式和自适应不是两个口号
+
+更实用的区分是：
+
+- 响应式：布局随可用空间连续变化。
+- 自适应：在若干断点切换布局。
+
+现代 CSS 不必二选一。可以用 `grid`、`flex`、`clamp()` 和容器查询做连续适配，再在关键断点调整结构。
 
 ```css
-.btn {
-  width: 140px;
-  height: 40px;
-  line-height: 40px;
-  text-align: center;
-  border: 1px solid;
+.page {
+  width: min(100% - 32px, 1120px);
+  margin-inline: auto;
 }
 
-@media only screen and (max-width: 768px) {
-  .btn {
-    width: 120px;
-  }
-}
-@media only screen and (max-width: 375px) {
-  .btn {
-    width: 80px;
-  }
+.title {
+  font-size: clamp(1.25rem, 2vw + 1rem, 2rem);
 }
 ```
 
-**注意媒体查询CSS代码顺序。**
+不要按 UA 判断设备。UA 可以伪造，也不能可靠表达屏幕尺寸、输入方式和能力。
 
-***注意@viewport 属性已经废弃了。***[废弃文档](https://link.zhihu.com/?target=https%3A//developer.mozilla.org/zh-CN/docs/Web/CSS/%40viewport)
+## 1px 边框不是所有屏幕都一样
 
-延伸：
+高 DPR 屏幕上，CSS 的 `1px` 可能看起来很粗，因为它占用了多个物理像素。
 
-如何优化响应式网站？
-
-根据当前设备屏幕逻辑像素对应加载不同的CSS与JavaScript代码。
-
-CSS
-
-```html
-<!-- 默认文档 -->
-<link href="pc.css" rel="stylesheet" media="print">
-<!-- 文档宽度小于 600 像素 -->
-<link href="mobile.css" rel="stylesheet" media="screen and (max-width: 600px)">
-```
-
-JavaScript
-
-```js
-var documentWdith = window.innerWidth|| document.documentElement.clientWidth || document.body.clientWidth;
-
-var el = document.getElementById("canvas");
-
-if(documentWdith<600){
-  // 移动设备方法
-  el.addEventListener("touchstart", ()=>{
-    // 触摸事件
-  });
-}else{
-  // 电脑设备方法
-  el.addEventListener("click", ()=>{
-    // 点击事件
-  });
-}
-```
-
-***不建议通过UA获取用户的浏览器信息，因为很多移动浏览器可以设置自定义UA。\***
-
-### 
-
-### 移动端通用兼容问题
-
-1. 点击延时300毫秒。
-
-[300原因](https://link.zhihu.com/?target=https%3A//thx.github.io/mobile/300ms-click-delay)
-
-***值得庆幸的是，所有移动端浏览器都已经解决这个问题了。\***
-
-2. 页面回弹效果。
-
-如果页面是全屏，不超过可视高度的话，建议禁用touchmove事件。
-
-如果页面不是全屏，超过可视高度的话，就不要禁用touchmove事件。
-
-***虽然有办法阻挡X5内核（QQ浏览器内核）的“网页有XXX提供”的这些信息，但是并没有真正阻挡iphone的回弹效果，拖拽还是会回弹。\***
-
-延伸：[iOS safari 如何阻止“橡皮筋效果”？ --知乎)](https://www.zhihu.com/question/22256539)
-
-3. 页面返回不刷新。
-
-往返缓存（Back/Forward cache）是浏览器的一种浏览器内存缓存机制。
-
-解决方案：
-
-```js
-var isPageHide = false;
-window.addEventListener("pageshow", function () {
-  if (isPageHide) {
-    window.location.reload();
-  }
-});
-window.addEventListener("pagehide", function () {
-  isPageHide = true;
-});
-```
-
-4. 1px 边框问题。
-
-由于移动端屏幕的**设备像素**与**逻辑像素**并不相等，所以产生在某些移动端的屏幕上1px边框略显粗。
-
-解决方案：
+一种常见方案是用伪元素画出 1 物理像素：
 
 ```css
-.row-1px {
-    position: relative;
+.hairline {
+  position: relative;
 }
-.row-1px:after {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
+
+.hairline::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid #ddd;
+  content: "";
+  pointer-events: none;
+  transform-origin: top left;
+}
+
+@media (min-resolution: 2dppx) {
+  .hairline::after {
     width: 200%;
-    border-bottom: 1px solid #e6e6e6;
-    color: #000;
     height: 200%;
-    -webkit-transform-origin: left top;
-    transform-origin: left top;
-    -webkit-transform: scale(0.5);
     transform: scale(0.5);
-    pointer-events: none;
-    box-sizing: border-box;
+  }
+}
+
+@media (min-resolution: 3dppx) {
+  .hairline::after {
+    width: 300%;
+    height: 300%;
+    transform: scale(0.3333);
+  }
 }
 ```
 
-5. 输入法挡住输入框。
+如果设计系统允许，很多时候直接使用普通 `1px` 或 `box-shadow` 更简单。不要为了绝对物理像素把结构搞复杂。
 
-在混合应用开发中，移动端内置浏览器组件设置了全屏。那么问题来了，假如是一个表单页面，里面有很多的输入框，点击最顶部的输入框的时候，移动端就会唤起输入法软件，于是就挡住最底部的输入框，导致无法看到输入框里面的内容。
+## 安全区和软键盘
 
-```html
-<!DOCTYPE html>
-<html>
-
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-        <title>移动端输入法挡住输入框</title>
-        <style>
-            input {
-                width: 100%;
-                line-height: 1.5rem;
-                border: 1px solid red;
-            }
-            
-            .block-fill {
-                height: 500px;
-            }
-        </style>
-    </head>
-
-    <body>
-
-        <div id="main">
-            <!--占位div-->
-            <div class="block-fill"></div>
-            <!--聚焦（方法一）-->
-            <input id="input" type="text"></input>
-            <!--聚焦（方法二）-->
-            <!--<input id="input" type="text" onfocus="focusInput()"></input>-->
-        </div>
-
-    </body>
-    <script>
-        //方法一：
-        //获取页面高度
-        var clientHeight = document.body.clientHeight;
-        //设置监听聚焦事件
-        document.body.addEventListener("focus", function(e) {
-            var focusElem = document.getElementById('input')
-        }, true);
-        //设置监听窗口变化时间
-        window.addEventListener("resize", function() {
-            if(focusElem && document.body.clientHeight < clientHeight) {
-                //使用scrollIntoView方法来控制输入框
-                focusElem.scrollIntoView(false);
-            }
-        });
-        //方法二：
-       //设置监听聚焦事件，延时滚动屏幕
-       funtion focusInput(){
-            setTimeout(function() {
-                 document.body.scrollTop=document.body.scrollHeight
-            }, 100)
-       }
-    </script>
-
-</html>
-```
-
-6. 刘海屏适配问题
-
-使用viewport的viewport-fit属性。
-
-```html
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-```
-
-***viewport-fit属性也是由苹果公司推出的属性，并非标准属性。***
-
-使用margin与padding属性对页面布局撑开。
+刘海屏使用 `env(safe-area-inset-*)`：
 
 ```css
-.iphonex-mt{
-      margin-top: constant(safe-area-inset-top);
-      margin-top: env(safe-area-inset-top);
- }
- .iphonex-mb{
-      margin-bottom: constant(safe-area-inset-bottom);
-      margin-bottom: env(safe-area-inset-bottom);
- }
- .iphonex-pl{
-      padding-left: constant(safe-area-inset-left);
-      padding-left: env(safe-area-inset-left);
- }
- .iphonex-pr{
-      padding-right: constant(safe-area-inset-right);
-      padding-right: env(safe-area-inset-right);
- }
+.bottom-bar {
+  padding-bottom: env(safe-area-inset-bottom);
+}
 ```
 
-延伸：[Designing Websites for iPhone](https://link.zhihu.com/?target=https%3A//webkit.org/blog/7929/designing-websites-for-iphone-x/)
+软键盘弹出时，`window.innerHeight` 不一定变化，但 `visualViewport` 会提供更准确的可视区域信息。
 
-7. setTimeout 、setInterval函数冻结问题
-
-PC端浏览器（Firefox、Chrome 和 Safari）
-场景：浏览器最小化、非激活当前标签页面。
-例子：非激活当前标签页面运行settimeout小于1秒的定时任务，会调整为1秒。
-
-mobile端浏览器（Firefox、Chrome 和 Safari）
-场景：浏览器进入后台、非激活当前标签页面。
-例子：非激活当前标签页面运行settimeout小于1秒的定时任务，会暂停执行。
-
-解决方案：
-
-1. 监听页面状态，重置定时任务
+输入框被遮挡时，可以监听 `visualViewport.resize`，在聚焦后把元素滚动到可视区域：
 
 ```js
-document.addEventListener('visibilitychange', function() {     
-   if(document.hidden) { 
-      // 清除定时器         
-   }else { 
-      // 重置定时器        
-   } 
-});
+input.addEventListener("focus", () => {
+  requestAnimationFrame(() => {
+    input.scrollIntoView({ block: "center" })
+  })
+})
 ```
 
-2. 使用requestIdleCallback函数继续执行定时任务。
+固定底部栏在键盘弹出时容易遮挡内容。优先使用普通文档流和 `sticky`，比全屏 fixed 布局更稳。
 
+## bfcache 不是“返回一定刷新”
 
+移动端浏览器常使用前进后退缓存。页面从缓存恢复时，不一定重新执行完整加载流程。
 
-[window.requestIdleCallback() - MDN](https://link.zhihu.com/?target=https%3A//developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
+```js
+window.addEventListener("pageshow", event => {
+  if (event.persisted) {
+    // 页面从 bfcache 恢复，按需刷新状态
+  }
+})
+```
 
+不要无条件 `location.reload()`。先判断页面状态是否真的过期，否则会把本可以秒开的返回操作变成一次完整网络请求。
 
+## 触摸和点击
 
-**实验室性方法，慎用。**
+现代浏览器在正确设置 viewport 后通常已经消除了 300ms 点击延迟，但旧 WebView 和特殊场景仍可能有差异。
 
-延伸：
+对于滚动和触摸交互，优先使用 Pointer Events：
 
-从Chrome 88开始，在特定情况下，用于非激活页面的setTimeout、setInterval将被限制为1分钟。
+```js
+element.addEventListener("pointerdown", handler, { passive: true })
+```
 
-[timer-throttling-in-chrome-88developer.chrome.com/blog/timer-throttling-in-chrome-88/](https://link.zhihu.com/?target=https%3A//developer.chrome.com/blog/timer-throttling-in-chrome-88/)
+只有确实需要阻止默认行为时才用非 passive 监听。乱用 `preventDefault` 会影响滚动和手势。
+
+## 后台定时器会被节流
+
+页面进入后台后，浏览器会降低定时器频率，甚至暂停执行。不要依赖 `setInterval` 精确计时。
+
+```js
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    // 暂停动画或轮询
+  } else {
+    // 重新同步状态
+  }
+})
+```
+
+`requestIdleCallback` 不是定时器的替代品，它在后台标签页也不保证按预期执行。
+
+## 最后
+
+移动端适配不是一套固定公式，而是对布局视口、像素比、浏览器生命周期和输入方式的理解。
+
+先在真实设备上复现问题，再选择方案。不要因为某个片段流行，就把它复制到所有页面。

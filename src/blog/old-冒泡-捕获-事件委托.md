@@ -1,179 +1,149 @@
 ---
-title: "冒泡、捕获、事件委托"
+title: 事件委托不是性能银弹
 date: 2022-03-08
-description: "DOM事件流 事件流描述的是从页面中接收事件的顺序。 事件发生时会在元素节点之间按照特定的顺序传播，这个传播过程即DOM事件流。 包括三个阶段： 事件捕获阶段 处于目标阶段 事件冒泡阶段 我们知道，在dom模型中，html是多层次的，当一个html元素上产生事件时，该事件会在do"
+description: 从事件流、target 和 currentTarget 到 closest，重新理解事件委托真正解决的问题和它的边界。
 tags:
   - JavaScript
   - 浏览器
+outline: true
 ---
 
-## DOM事件流
+我第一次学事件委托时，记住的是一句很顺口的话：**把事件绑在父元素上，减少 DOM 操作，提高性能。**
 
-事件流描述的是从页面中接收事件的顺序。
+这句话不能算错，但它把事件委托讲小了。
 
-事件发生时会在元素节点之间按照特定的顺序传播，这个传播过程即DOM事件流。
+事件委托真正有价值的地方，是它把“事件发生在哪里”和“事件由谁处理”分开了。理解这一点，动态列表、表格操作和组件事件代理都会变得自然很多。
 
-包括三个阶段：
+## 事件流有三个阶段
 
-1. 事件捕获阶段
-2. 处于目标阶段
-3. 事件冒泡阶段
+点击一个按钮时，事件并不是只在按钮上发生一次。
 
-我们知道，在dom模型中，html是多层次的，当一个html元素上产生事件时，该事件会在dom树元素节点之间按照特定的顺序去传播。传播路径的每一个节点，都会收到这个事件，这就是dom事件流。当事件发生后，就会从内向外逐级传播，因为事件流本身没有处理事件的能力，所以，处理事件的函数并不会绑定在该事件源上。例如我们点击了一个按钮，产生了一个click事件，click事件就会开始向上传播，一直到到处理这个事件的代码中。
-
-`事件捕获`：事件从最不精确的对象(document 对象)开始触发，然后到最精确(也可以在窗口级别捕获事件，不过必须由开发人员特别指定)。
-
-`事件目标`：当到达目标元素之后，执行目标元素该事件相应的处理函数。如果没有绑定监听函数，那就不执行。
-
-`事件冒泡`：事件按照从最特定的事件目标到最不特定的事件目标(document对象)的顺序触发，当一个元素接收到事件的时候会把他接收到的事件传给自己的父级，一直到window 。
-
-注意:
-
-- JS代码只能执行捕获或者冒泡其中的一个阶段
-- onclick 和 attachEvent 只能得到冒泡阶段
-- addEventListener (type, listener[, useCapture]) 第三个参数如果是true，表示在事件捕获阶段调用事件处理程序；如果是false（不写默认就是false），表示在事件`冒泡阶段`电泳事件处理程序。
-- 在实际开发中，我们很少使用事件捕获(低版本ie不兼容)，我们更关注事件冒泡
-- 有些事件是没有冒泡的，比如`onblur、onfocus、onmouseover、onmouseleave`
-- 虽然事件冒泡有时候会带来麻烦，但是有时候又会巧妙的做某些事情，我们后面讲解
-
-## 事件对象
-
-- event 就是一个事件对象，写道我们的侦听函数的小括号里面，当形参来看
-- 事件对象只有有了事件才会存在，他是系统给我们自动创建的，不需要我们传递参数
-- 事件对象是我们的事件的一系列相关数据的集合，比如鼠标点击里面就包含了鼠标的相关信息
-- 这个事件对象我们可以自己命名，比如 event、evt 、e 等
-- 事件对象也有兼容性问题。 IE 6、7、8通过 window.event 实现
-
-兼容性写法：
-
-```js
-event = event || windoe.event;
-复制代码
+```text
+document
+  ↓ capture
+父元素
+  ↓ capture
+button
+  ↑ bubble
+父元素
+  ↑ bubble
+document
 ```
 
-### 事件对象常见额属性和方法
-
-| 事件对象属性方法          | 说明                                                         |
-| ------------------------- | ------------------------------------------------------------ |
-| `e.target`                | 返回触发事件的对象  **标准**                                 |
-| e.scrElement              | 返回触发事件的对象  非标准 IE 6  7 8 使用                    |
-| e.type                    | 返回事件的类型，比如click、mouseover等，不带 on              |
-| e.cancelBubble            | 该属性阻止冒泡，非标准，IE 6 7 8 使用                        |
-| e.returnValue             | 该属性阻止默认事件（默认行为）非标准 ，IE 6 7 8 使用，比如不让链接跳转 |
-| `e.preventDefaule() `     | `该方法阻止默认事件（默认行为）标准 ，比如不让链接跳转`      |
-| **`e.stopPropagation()`** | `阻止冒泡，标准  `                                           |
-
-### e.target 和 this 的区别
-
-this 返回的是绑定事件的对象（元素）
-
-e.target 返回的是点击的那个对象，就是谁触发了这个事件,如点击事件->谁被点了
+现代浏览器使用 `addEventListener` 时，默认监听冒泡阶段：
 
 ```js
-var ul = document.querySelector('ul');
-ul.addEventListener('click', function (e) {
-    console.log(this);
-    console.log(e.target);
+parent.addEventListener("click", handler)
+```
+
+第三个参数传 `true` 可以监听捕获阶段：
+
+```js
+parent.addEventListener("click", handler, true)
+```
+
+也可以传配置对象：
+
+```js
+parent.addEventListener("click", handler, {
+  capture: false,
+  once: true,
+  passive: true,
 })
-
-// <ul>...</ul>
-// <li>123</li>
-复制代码
 ```
 
-### 阻止对象默认行为（重）
+`passive` 对滚动、触摸这类高频事件很有用，它告诉浏览器“我不会调用 `preventDefault`”，从而允许浏览器提前优化。
 
-三种方法：
-
-- `e.preventDefaule();` 是一个方法，适合普通浏览器
-- e.returnValue; 是一个属性，适用于 IE 6 7 8
-- return false; 没有兼容性问题，但是需要注意后面的语句就不执行了，直接跳出
-
-### 阻止冒泡（重）
-
-- `event.stopPropagation();    // 一般浏览器停止冒泡`
-- event.cancelBubble;         // IE 6 7 8 的停止冒泡
-
-```javascript
-var father = document.querySelector('.father');
-var son = document.querySelector('.son');
-father.addEventListener('click', alertName, false);
-son.addEventListener('click', alertName, false);
-document.addEventListener('click',function () {
-    alert('document');
-}, false);
-function alertName (event) {
-    alert(this.getAttribute("class"));
-    event.stopPropagation();    // 停止冒泡
-    event.cancelBubble;         // IE 6 7 8 的停止冒泡
-}
-复制代码
-```
-
-## 事件委托（代理、委派）
-
-### 事件委托的原理（重）
-
-事件委托的原理：不给每个子节点单独设置事件监听器，而是设置在其父节点上，然后利用冒泡原理设置每个子节点。
-
-**例如：** 给 ul 注册点击事件，然后利用事件对象的 target 来找到当前点击的 li ，然后事件冒泡到 ul 上， ul 有注册事件，就会触发事件监听器。
-
-### 事件委托的作用
-
-只操作了一次 DOM ，提高了程序的性能。
-
-### 为什么要事件委托?（重）
-
-在JavaScript中，添加到页面上的事件处理程序`数量将直接关系到页面的整体运行性能`，因为`需要不断的操作dom`,那么引起`浏览器重绘和回流`的可能也就越多，页面交互的事件也就变的越长，这也就是为什么要`减少dom操作的原因`。每一个事件处理函数，都是一个对象，那么多一个事件处理函数，内存中就会被多占用一部分空间。如果要用事件委托，就会将所有的操作放到js程序里面，`只对它的父级(如果只有一个父级)这一个对象进行操作，与dom的操作就只需要交互一次，这样就能大大的减少与dom的交互次数，提高性能`；
-
-### **事件委托小案例**
-
-需求：鼠标放到li上，对应的li背景颜色变为灰色
+## target 和 currentTarget
 
 ```html
-<ul>
-    <li>111</li>
-    <li>222</li>
-    <li>333</li>
-    <li>444</li>
+<ul id="list">
+  <li data-id="1"><span>订单 1</span></li>
+  <li data-id="2"><span>订单 2</span></li>
 </ul>
-复制代码
 ```
-
-**普通实现**
-
-(给每个li都绑定一个事件让其变灰）：
 
 ```js
-$("li").on("mouseover",function(){
-　　　$(this).css("background-color","gray").siblings().css("background-color","white");
+const list = document.querySelector("#list")
+
+list.addEventListener("click", event => {
+  console.log(event.target)        // 真正被点中的元素，可能是 span
+  console.log(event.currentTarget) // 绑定监听器的 ul
 })
-复制代码
 ```
 
-上面这种普通实现看似没有什么问题，但是如果在这段代码结束以后，我们动态的给ul又增加了一个li，那么新增的这个li是不带有事件的，如果有无数个li结点，我们的dom是吃不消的。
+这是事件委托的基础：
 
-**使用事件委托实现**
+- `target` 是实际触发事件的元素。
+- `currentTarget` 是当前执行监听器的元素。
 
-js中事件是会冒泡的，所以`this是可以变化的，但event.target不会变化`，它永远是直接接受事件的目标DOM元素
+不要假设 `target` 就是 `li`，它可能是 `li` 里的任意子元素。
 
-利用事件冒泡 只指定ul的事件处理 就可以控制ul下的所有的li的事件
+## 用 closest 找到业务元素
 
 ```js
-$("ul").on("mouseover", function(e) {
-    $(e.target).css("background-color", "gray").siblings().css("background-color", "white");
+list.addEventListener("click", event => {
+  const item = event.target.closest("li[data-id]")
+
+  if (!item || !list.contains(item)) return
+
+  console.log(item.dataset.id)
 })
-复制代码
 ```
 
-- 第一步：`给父元素绑定事件`
+`closest` 会从当前元素开始向上查找，正好适合处理“点在子元素里”的情况。
 
-  给元素ul添加绑定事件，绑定mouseover事件设置css（也可通过addEventListener为点击事件click添加绑定）
+`list.contains(item)` 是必要的校验：如果事件来自列表外的元素，`closest` 可能找到别的地方的 `li`。
 
-- 第二步：`监听子元素的冒泡事件`
+## 为什么事件委托适合动态列表
 
-  这里默认是冒泡，点击子元素li会向上冒泡
+假设列表来自接口，分页、筛选都会重新渲染。给每个 `li` 单独绑定事件，代码要跟着 DOM 生命周期走；绑在父级上，新增的子元素自动被覆盖。
 
-- 第三步：`找到是哪个子元素的事件`
+```js
+function render(rows) {
+  list.innerHTML = rows
+    .map(row => `<li data-id="${row.id}">${row.name}</li>`)
+    .join("")
+}
+```
 
-  通过匿名回调函数的参数e用来接收事件对象，通过target获取触发事件的目标（可以通过判断target的类型来确定是哪一类的子元素对象执行事件）
+不需要每次渲染后重新绑定。
+
+但“减少 DOM 操作”并不是唯一收益。更实际的好处是：事件处理逻辑集中，状态变化和操作入口更容易追踪。
+
+## 事件委托的边界
+
+### 不是所有事件都冒泡
+
+`focus`、`blur` 不冒泡，通常用 `focusin`、`focusout`。`mouseenter` 不冒泡，可以用 `mouseover` 配合判断，或者直接监听具体元素。
+
+### stopPropagation 会截断委托
+
+```js
+child.addEventListener("click", event => {
+  event.stopPropagation()
+})
+```
+
+子元素一旦阻止冒泡，父级委托就收不到事件。不要为了“避免影响父级”随手加 `stopPropagation`，先确认是否真的需要。
+
+### 事件代理会增加匹配成本
+
+一个父级监听器减少了监听器数量，但每次事件都要做 `closest` 和条件判断。对于简单静态元素，直接绑定可能更直观。
+
+### Shadow DOM 需要额外处理
+
+跨 Shadow DOM 时，`event.target` 可能被重定向。需要完整路径时用 `event.composedPath()`，并在设计组件边界时明确事件是否 `composed`。
+
+## preventDefault 和 stopPropagation 不是一回事
+
+- `preventDefault`：阻止浏览器默认行为，比如链接跳转、表单提交。
+- `stopPropagation`：阻止事件继续传播。
+
+事件委托依赖传播，所以除非明确知道后果，不要在委托容器内部随意调用 `stopPropagation`。
+
+## 最后
+
+事件委托不是“性能优化技巧”，而是一种事件处理组织方式。它适合动态、批量、结构稳定的列表，不适合所有场景。
+
+先理解事件流，再决定监听器放在哪里。这个顺序比背“父级绑定”更重要。

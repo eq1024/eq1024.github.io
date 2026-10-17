@@ -1,161 +1,130 @@
 ---
-title: "useMemo, useCallback, useEffect 三者区别"
+title: useMemo、useCallback、useEffect 不是同一类优化
 date: 2023-04-24
-description: "useMemo 父组件将一个 【值】 传递给子组件，若父组件的其他值发生变化时，子组件也会跟着渲染多次，会造成性能浪费； useMemo是将父组件传递给子组件的值缓存起来，只有当 useMemo中的第二个参数状态变化时，子组件才重新渲染 useMemo便是用于缓存该函数的执行结果"
+description: 从值的缓存、函数身份、外部同步三个角度讲清三个 Hook，并说明什么时候不该用它们。
 tags:
   - React
+outline: true
 ---
 
-> useMemo
+这三个 Hook 经常被放在一起比较，因为名字都带 `use`，都涉及“依赖”和“性能”。
 
-- 父组件将一个 `【值】 传递给子组件`，若父组件的其他值发生变化时，子组件也会跟着渲染多次，会造成性能浪费； useMemo是将父组件传递给`子组件的值缓存起来`，只有当 useMemo中的第二个参数状态变化时，子组件才重新渲染
-- useMemo便是用于`缓存该函数的执行结果`，仅当依赖项改变后才会重新计算
+但它们解决的问题并不一样：
 
-```typescript
-修改后如下，注意useMemo缓存的是函数执行的结果, 只有当[count, price]改变时才会重走一遍
+- `useMemo` 缓存一个计算结果。
+- `useCallback` 缓存一个函数引用。
+- `useEffect` 在提交后同步外部系统。
 
-const Parent = () => {
-    const [count, setCount] = useState(0);
-    const [color,setColor] = useState("");
-    const [price,setPrice] = useState(10);
-    const handleClick = () => {
-        setCount(count + 1);
-    }
-    const getTotal = useMemo(()=>{
-        console.log("getTotal exec ...") 
-        return count * price
-    },[count, price])
-    
-    return (<div>
-        <div> <input onChange={(e) => setColor(e.target.value)}/></div>
-        <div> <input value={price}  onChange={(e) => setPrice(Number(e.target.value))}/></div>
-        <div> {count} <button onClick={handleClick}>+1</button></div>
-        <div> {getTotal}</div>
-    </div>)
-}
+把三者混成“性能优化三件套”，很容易写出依赖数组很漂亮、实际却没有收益的代码。
+
+## useMemo：缓存值
+
+```jsx
+const total = useMemo(() => {
+  return items.reduce((sum, item) => sum + item.price, 0)
+}, [items])
 ```
 
-> memo
+只有当 `items` 变化时才重新计算。
 
-- 父组件name属性或text属性变化都会导致Parent函数重新执行，所以即使传入子组件props没有任何变化，甚至子组件没有依赖于任何props属性，`都会导致子组件重新渲染`
-- 使用memo包裹子组件时，`只有props发生改变子组件才会重新渲染`,以提升一定的性能
+适合：
 
-```pre
-const Child = memo((props: any) => {
-    console.log("子组件更新..."); // 只有当props属性改变，name属性改变时，子组件才会重新渲染
-    return (
-        <div>
-            <h3>子组件</h3>
-            <div>text:{props.name}</div>
-            <div>{new Date().getTime()}</div>
-        </div>
-    )
+- 计算量确实很大
+- 结果被用作其他 Hook 的依赖
+- 需要保持对象引用稳定
+
+不适合：
+
+- 简单加法、简单字符串拼接
+- 为了“看起来优化”而缓存所有东西
+- 依赖数组写错，导致缓存了过期值
+
+React 不保证 `useMemo` 永远保留缓存。它可能在未来丢弃缓存来释放内存。所以不要把“只执行一次”的业务逻辑塞进 `useMemo`，那是 `useRef` 或 Effect 的职责。
+
+## useCallback：缓存函数身份
+
+```jsx
+const handleSelect = useCallback(id => {
+  setSelectedId(id)
+}, [])
+```
+
+它返回同一个函数引用，直到依赖变化。
+
+单独使用 `useCallback` 通常没有意义。只有当函数被传给 `memo` 子组件、作为其他 Hook 的依赖，或者用于比较引用时，它才有价值。
+
+```jsx
+const Child = memo(function Child({ onSelect }) {
+  return <button onClick={() => onSelect(1)}>select</button>
 })
-
-
-const Parent = () => {
-    const [text, setText] = useState("")
-    …… ……
-    <Child name ={text}/>
-}
-
 ```
 
-- 使用memoAPI来缓存组件
+如果父组件每次渲染都创建新函数，`memo` 的浅比较会认为 `onSelect` 变了，子组件仍然会重新渲染。这时 `useCallback` 才有意义。
 
-```pre
-import React, { memo } from "react"
-const CacheComponent = memo(() => {
-  return <div> ^^ </div>  
-})
+不要为了“避免重新渲染”给所有函数加 `useCallback`。缓存本身也有成本，依赖数组还会增加维护负担。
 
+## useEffect：同步外部系统
+
+```jsx
+useEffect(() => {
+  const controller = new AbortController()
+
+  fetch(`/api/users/${id}`, { signal: controller.signal })
+    .then(res => res.json())
+    .then(setUser)
+
+  return () => controller.abort()
+}, [id])
 ```
 
-> useCallback
+Effect 在浏览器完成绘制后执行，用来同步 React 之外的东西：
 
-- 父组件将一个`【方法】传递给子组件`，若父组件的其他状态发生变化时，子组件也会跟着`渲染多次`，会造成性能浪费； usecallback是将父组件传给`子组件的方法给缓存下来`，只有当 usecallback中的第二个参数状态变化时，子组件才`重新渲染`
-- 但如果传入的props`包含函数`，父组件每次重新渲染`都是创建新的函数`，所以传递函数子组件还是会`重新渲染`，即使函数的内容还是一样，我们希望把`函数也缓存起来`，于是引入useCallback
+- 请求
+- 订阅
+- 定时器
+- DOM API
+- 第三方库实例
 
-```pre
-const Child = memo((props: any) => {
-    console.log("子组件更新..."); // 父级Parent函数有东西变化，Child重新执行，handleInputChange已经指向新的函数实例，所以子组件依然会刷新
-    return (
-        <div>
-            <div>text:{props.name}</div>
-            <div> <input onChange={props.handleInputChange} /></div>
-        </div>
-    )
-})
-const Parent = () => {
-    const [text, setText] = useState("")
-    const [count, setCount] = useState(0)
-    const handleInputChange =useCallback((e) => {
-         setText(e.target.value )
-    },[]) 
-    return (<div>
-            …… ……
-        <Child name={text} handleInputChange={handleInputChange}/>
-    </div>)
-}
+它不是用来计算派生数据的。能在 render 中算出来的值，不应该再放进 state 和 Effect。
 
+```jsx
+// 没必要
+const [total, setTotal] = useState(0)
+useEffect(() => {
+  setTotal(items.reduce((sum, item) => sum + item.price, 0))
+}, [items])
 ```
 
-- useCallback用用于缓存函数，只有当依赖项改变时，函数才会重新执行返回新的函数对于父组件中的函数作为props传递给子组件时，只要父组件数据改变，函数重新执行，`作为props的函数也会产生新的实例`，导致子组件的刷新使用useCallback可以缓存函数。`需要搭配memo使用`
+直接计算或 `useMemo` 更合适。
 
-```pre
-1 - 在Parent组件里 handleInputChange用useCallback 包裹起来
-2 - 当前 handleInputChange 不依赖与任何项，所以handleInputChange只在初始化的时候调用一次函数就被缓存起来
+## 依赖数组不是“告诉 React 什么时候执行”
 
-const handleInputChange =useCallback((e) => {
-     setText(e.target.value )
-},[]) 
+依赖数组表达的是：这个 Effect 使用了哪些响应式值。
 
-3 - 将count加入到依赖项，count变化后重新生成新的函数，改变函数内部的count值
-const handleInputChange =useCallback((e) => {
-     setText(e.target.value )
-},[count]) 
-
+```jsx
+useEffect(() => {
+  console.log(userId)
+}, [userId])
 ```
 
-### useEffect 和 useMemo 区别
+遗漏依赖会导致 stale closure。把依赖写全，通常比用 `// eslint-disable` 更安全。
 
-- useEffect是在`DOM改变之后触发`，useMemo在`DOM渲染之前就触发`
-- useMemo是在`DOM更新前触发的`，就像官方所说的，类比生命周期就是[shouldComponentUpdate]
-- useEffect可以帮助我们在`DOM更新完成后执行某些副作用操作`，如数据获取，设置订阅以及手动更改 React 组件中的 DOM 等
-- 不要在这个useMemo函数内部`执行与渲染无关的操作`，诸如`副作用这类的操作属于 useEffect 的适用范畴`，而不是 useMemo
-- 在useMemo中使用`setState你会发现会产生死循环`，并且会有警告，因为useMemo是`在渲染中进行的`，你在其中操作`DOM`后，又会导致触发`memo`
+如果依赖太复杂，通常说明 Effect 职责太多，应该拆分或把逻辑移到事件处理器里。
 
-### useCallback 和 useMemo 区别
+## 什么时候该优化
 
-- 类似 `shouldComponentUpdate`， 判定该组件的 props 和 state 是否有变化，从而避免每次父组件render时都去重新渲染子组件
-- `useCallback返回一个函数`，当把它返回的这个函数作为子组件使用时，可以避免每次父组件更新时都重新渲染这个子组件,子组件一般配合 `memo` 使用
+先问三个问题：
 
-```pre
-const renderButton = useCallback(
-     () => (
-         <Button type="link">
-            {buttonText}
-         </Button>
-     ),
-     [buttonText]    // 当buttonText改变时才重新渲染renderButton
-);
+1. 这个计算真的慢吗？
+2. 子组件真的因为引用变化而重新渲染吗？
+3. 这个 Effect 真的需要存在吗？
 
-```
+没有测量之前，不要默认 `useMemo` 和 `useCallback` 会提升性能。它们可能降低可读性，并引入依赖错误。
 
-- `useMemo返回的的是一个值`，用于避免在每次渲染时都进行高开销的计算
+React 的新编译器会减少一部分手动缓存需求，但底层判断没有变：纯计算、稳定引用、外部同步，各归各的 Hook。
 
-```pre
-const result = useMemo(() => {
-    for (let i = 0; i < 100000; i++) {
-      (num * Math.pow(2, 15)) / 9;
-    }
-}, [num]);
+## 最后
 
-```
+`useMemo` 管值，`useCallback` 管函数身份，`useEffect` 管外部副作用。
 
-### 什么时候用useCallback和useMemo进行优化
-
-链接 ：[技术来源程序员客栈的前端人](https://link.juejin.cn/?target=https%3A%2F%2Fjishuin.proginn.com%2Fp%2F763bfbd4ed55)
-
-- 我觉得`任何时候都用是一个好的习惯`，就算有比对代价也比较小，因为哪怕是`对象也只是引用比较`
-- React 的工作方式遵循纯函数，特别是数据的 `immutable`，因此，使用 memo 很重要
+先写清楚数据流，再决定是否缓存。优化是结果，不是默认写法。

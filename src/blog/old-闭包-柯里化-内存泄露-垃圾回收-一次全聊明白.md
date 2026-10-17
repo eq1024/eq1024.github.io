@@ -1,270 +1,167 @@
 ---
-title: "闭包、柯里化、内存泄露、垃圾回收，一次全聊明白"
+title: 闭包和柯里化，真正难的是边界
 date: 2022-03-05
-description: "本文涉及内容 闭包 柯里化 内存泄露 垃圾回收 阅读本文前，您需要对作用域和作用域链、原型和原型链有足够了解，见本博客另一篇文章，点这里，以及对this指向有足够了解，点这里 什么是闭包 能够访问其他函数内部变量的函数，被称为 闭包，简单来说，闭包就是函数内部定义的函数，被返回了"
+description: 闭包不是内存泄漏的同义词，柯里化也不是函数式编程的装饰品。从实际代码出发，理解它们为什么有用、什么时候不该用。
 tags:
   - JavaScript
   - 计算机基础
+outline: true
 ---
 
-### 本文涉及内容
+闭包可能是被解释得最多、也被误解得最多的 JavaScript 概念之一。
 
-- 闭包
-- 柯里化
-- 内存泄露
-- 垃圾回收
+“函数内部返回函数”“可以访问外部变量”“会造成内存泄漏”，这些说法都不算错，但都不够解释真实代码里的问题。
 
-**阅读本文前，您需要对作用域和作用域链、原型和原型链有足够了解，见本博客另一篇文章，[点这里](https://www.cnblogs.com/EQ1024/p/15977786.html)，以及对this指向有足够了解，[点这里](https://www.cnblogs.com/EQ1024/p/14303210.html)**
+我后来更愿意把闭包理解成：**函数和它定义时的词法环境一起被打包走了。**
 
-### 什么是闭包
+## 闭包保存的是环境，不是快照
 
-> 能够访问其他函数内部变量的函数，被称为 闭包，简单来说，闭包就是函数内部定义的函数，被返回了出去并在外部调用，它绕过了作用域的监管机制，从外部也能获取到内部作用域的信息
-
-笔者认为，不应该问什么是闭包，而是问谁有闭包。因为闭包的作用就如同一个作用域，携带着原本执行完就会销毁的数据（一个函数内的局部变量执行完毕后就会销毁），而能够访问其他函数内部变量的函数就会产生闭包。
-
-把闭包想象成一个背包就行，当闭包函数被返回，作用域链的顺序是：
-
-**闭包 --> 外部函数作用域  --> 外部函数的外部函数作用域  --> 直到全局作用域**
-
-也就是说，会最先到闭包里**去找**
-
-
-
-**作用域和上下文的区别**
-
-上下文包含作用域,上下文指的是当前的作用域和包裹在它外面的作用域的合集.
-
-#### 闭包例子
-
-```javascript
-function foo() {
-  var a = 2;
-  function bar() {
-    console.log( a );
-  }
-  return bar;
-}
-var baz = foo();
-baz(); // 这就形成了一个闭包
-```
-
-从上面的例子我们能看出闭包形成的主要特征：
-
-- 一般会出现一个return，也可以不return直接调用（如在foo中直接调用bar）
-- return中往往会出现引用函数作用域变量的代码
-- 被返回到外部去
-
-#### 复杂例子
-
-```javascript
+```js
 function createCounter() {
-  let counter = 0
-  const myFunction = function () {
-    counter = counter + 1
-    return counter
-  }
-  return myFunction
-}
-const increment = createCounter()
-const c1 = increment()
-const c2 = increment()
-const c3 = increment()
+  let count = 0
 
-//console.log('example increment', c1, c2, c3)
-```
-
-1. 第`1-8`行。我们在全局执行上下文中创建了一个新的变量`createCounter`，它得到了指定的函数定义。
-2. 第`9`行。我们在全局执行上下文中声明了一个名为`increment`的新变量。
-3. 第`9`行。我们需要调用`createCounter`函数并将其返回值赋给`increment`变量。
-4. 第`1-8`行。调用函数，创建新的本地执行上下文。
-5. 第`2`行。在本地执行上下文中，声明一个名为`counter`的新变量并赋值为 `0` 。
-6. 第`3-6`行。声明一个名为`myFunction`的新变量，变量在本地执行上下文中声明,变量的内容是另一个函数定义。如第`4`行和第`5`行所定义，现在我们还创建了一个闭包，并将其作为函数定义的一部分。闭包包含作用域中的变量，在本例中是变量`counter`(值为`0`)。
-7. 第`7`行。返回`myFunction`变量的内容,删除本地执行上下文。`myFunction`和`counter`不再存在。控制权交给了调用上下文，我们返回函数定义和它的闭包，闭包中包含了创建它时在作用域内的变量。
-8. 第`9`行。在调用上下文(全局执行上下文)中，`createCounter`返回的值被指定为`increment`，变量`increment`现在包含一个函数定义(和闭包),由createCounter返回的函数定义,它不再标记为`myFunction`，但它的定义是相同的,在全局上下文中，称为`increment`。
-9. 第`10`行。声明一个新变量`c1`。
-10. 继续第`10`行。查找变量`increment`，它是一个函数，调用它。它包含前面返回的函数定义,如第`4-5`行所定义的。(它还有一个带有变量的闭包)。
-11. 创建一个新的执行上下文，没有参数，开始执行函数。
-12. 第`4`行。`counter = counter + 1`，寻找变量 `counter`，在查找本地或全局执行上下文之前，让我们检查一下闭包，瞧，闭包包含一个名为`counter`的变量，其值为`0`。在第`4`行表达式之后，它的值被设置为`1`。它再次被储存在闭包里，闭包现在包含值为`1`的变量 `counter`。
-13. 第`5`行。我们返回`counter的值`，销毁本地执行上下文。
-14. 回到第`10`行。返回值`1`被赋给变量`c1`。
-15. 第`11`行。我们重复步骤`10-14`。这一次，在闭包中此时变量`counter`的值是1。它在第`12`行设置的，它的值被递增并以`2`的形式存储在递增函数的闭包中,`c2`被赋值为`2`。
-16. 第`12`行。重复步骤`10-14`行,`c3`被赋值为3。
-17. 第13行。我们打印变量`c1 c2`和`c3`的值。
-
-### 柯里化
-
-> 柯里化是一种将使用多个参数的一个函数转换成一系列使用一个参数的函数的技术
-
-**示例一**
-
-```javascript
-源函数
-addX= (a,b) => a+b
-
-****柯里化****
-
-简写
-let c = 4
-const addX = x => n => n + x
-const addThree = addX(3)
-let d = addThree(c)
-
-正常写
-let c = 4
-function addX(x) {
-  return function(n) {
-     return n + x
+  return () => {
+    count += 1
+    return count
   }
 }
-const addThree = addX(3)
-let d = addThree(c)
 
+const next = createCounter()
+next() // 1
+next() // 2
 ```
 
-**示例二**
+`createCounter` 返回的箭头函数仍然能访问 `count`，而且访问的是同一个绑定，不是调用时复制的一份值。
 
-```javascript
-// 数学和计算科学中的柯里化：
+这也是闭包能做私有状态的基础：
 
-//一个接收三个参数的普通函数
-function sum(a,b,c) {
-    console.log(a+b+c)
+```js
+function createStore(initial) {
+  let value = initial
+
+  return {
+    get: () => value,
+    set: next => {
+      value = next
+    },
+  }
+}
+```
+
+外部拿不到 `value`，只能通过 `get` / `set` 操作。比起把所有状态都挂在对象上，这种方式能明确边界。
+
+## 闭包也会带来过期状态
+
+闭包不会自动读取“最新变量”，它读取的是自己作用域里的绑定。如果这个绑定没有更新，你拿到的就是旧值。
+
+```js
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => {
+    console.log(i)
+  }, 0)
 }
 
-//用于将普通函数转化为柯里化版本的工具函数
+// 3 3 3
+```
+
+`var` 只有一个函数级绑定，三个回调共享同一个 `i`。改成 `let` 后，每次循环都会创建新的绑定：
+
+```js
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => {
+    console.log(i)
+  }, 0)
+}
+
+// 0 1 2
+```
+
+React 里的 stale closure 也是同一个问题。`useEffect` 或事件处理器捕获的是创建时的变量，如果没有正确的依赖或更新方式，就会一直读到旧值。
+
+## 柯里化是参数的分批提交
+
+柯里化把一个接收多个参数的函数，变成一串接收单个参数的函数：
+
+```js
+function add(a, b, c) {
+  return a + b + c
+}
+
 function curry(fn) {
-  //...内部实现省略，返回一个新函数
-}
+  return function curried(...args) {
+    if (args.length >= fn.length) {
+      return fn.apply(this, args)
+    }
 
-//获取一个柯里化后的函数
-let _sum = curry(sum);
-
-//返回一个接收第二个参数的函数
-let A = _sum(1);
-//返回一个接收第三个参数的函数
-let B = A(2);
-//接收到最后一个参数，将之前所有的参数应用到原函数中，并运行
-B(3)    // print : 6
-
-```
-
-#### 柯里化的用途
-
-借助柯里化对 checkByRegExp 函数进行封装，以简化代码书写，提高代码可读性。
-
-```javascript
-//进行柯里化
-let _check = curry(checkByRegExp);
-//生成工具函数，验证电话号码
-let checkCellPhone = _check(/^1\d{10}$/);
-//生成工具函数，验证邮箱
-let checkEmail = _check(/^(\w)+(\.\w+)*@(\w)+((\.\w+)+)$/);
-
-checkCellPhone('18642838455'); // 校验电话号码
-checkCellPhone('13109840560'); // 校验电话号码
-checkCellPhone('13204061212'); // 校验电话号码
-
-checkEmail('test@163.com'); // 校验邮箱
-checkEmail('test@qq.com'); // 校验邮箱
-checkEmail('test@gmail.com'); // 校验邮箱
-```
-
-### 内存泄露
-
-> 无法被自动回收，长期存在的数据，导致内存看浪费
-
-**1. 意外的全局变量**
-
-```javascript
-function fn() {
-  a = 'global variable'
-   this.a = 'global variable'
-}
-fn()
-```
-
-函数内未声明的和使用this（指window的时候）的情况，变量挂载到全局上，造成内存泄露
-
-**2. 闭包引起的内存泄漏**
-
-见上面内容,通过obj=null清楚（垃圾回收为引用模式下，标记模式会清理）
-
-**3. 没有清理的`DOM`元素引用**
-
-```javascript
-// 在对象中引用DOM
-var elements = {
-  btn: document.getElementById('btn'),
-}
-function doSomeThing() {
-  elements.btn.click()
-}
-
-function removeBtn() {
-  // 将body中的btn移除, 也就是移除 DOM树中的btn
-  document.body.removeChild(document.getElementById('button'))
-  // 但是此时全局变量elements还是保留了对btn的引用, btn还是存在于内存中,不能被GC回收
-}
-
-```
-
-解决方法：手动删除，`elements.btn = null`。
-
-**4. 被遗忘的定时器或者回调**
-
-```javascript
-// 定时器
-var serverData = loadData()
-setInterval(function () {
-  var renderer = document.getElementById('renderer')
-  if (renderer) {
-    renderer.innerHTML = JSON.stringify(serverData)
+    return (...next) => curried.apply(this, [...args, ...next])
   }
-}, 5000)
-
-// 观察者模式
-var btn = document.getElementById('btn')
-function onClick(element) {
-  element.innerHTMl = "I'm innerHTML"
 }
-btn.addEventListener('click', onClick)
+
+const curriedAdd = curry(add)
+curriedAdd(1)(2)(3) // 6
+curriedAdd(1, 2)(3) // 6
 ```
 
-解决方法：
+这里的 `fn.length` 是函数声明时的形参数量。遇到默认参数、剩余参数或可变参数时，这个简单实现就不够用了，需要显式传入参数个数。
 
-- 手动删除定时器和 dom。
-- removeEventListener 移除事件监听
+柯里化的实用场景是复用配置：
 
-### 垃圾回收
+```js
+const check = curry((pattern, value) => pattern.test(value))
 
-> 分为`引用计数算法`和`清除标记算法`
+const isPhone = check(/^1\d{10}$/)
+const isEmail = check(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+```
 
-IE9之前：引用计数算法
+它不是为了把代码写得更“函数式”，而是把一部分参数提前固定，生成更小的工具函数。
 
-IE9之后：清除标记算法
+## 不要为了柯里化而柯里化
 
-#### 引用计数算法
+如果一段逻辑只调用一次，拆成一层层函数只会增加阅读成本。
 
-> 就是判断一个对象的引用数，引用数`为0`就回收，引用数`大于0`就不回收
+柯里化适合：
 
-引用计数算法在处理 COM 对象（组件对象模型）会有循环引用的问题，而循环引用才是导致内存泄漏的元凶。
+- 配置固定的校验器、请求器
+- 组合函数时逐步传入上下文
+- 需要复用中间函数的场景
 
-#### 清除标记算法
+不适合：
 
-> 标记法就是，将`可达`的对象标记起来，`不可达`的对象当成垃圾回收。
+- 只有一次调用的业务代码
+- 参数含义本来就不清晰，硬拆成 `a => b => c`
+- 为了炫技而牺牲调试信息
 
-就是从初始的`根对象（window或者global）`的指针开始，向下搜索子节点，子节点被搜索到了，说明该子节点的引用对象可达，并为其进行标记，然后接着递归搜索，直到所有子节点被遍历结束。那么没有被遍历到节点，也就没有被标记，也就会被当成没有被任何地方引用，就可以证明这是一个需要被释放内存的对象，可以被垃圾回收器回收。
+## 闭包和内存
 
-```javascript
-这种循环就会被清理
-function cycle(){
-  let obj1={}
-  let obj2={}
-  obj1[a]=obj2
-  obj2[a]=obj1
+闭包会保留它引用的变量。这本身不是内存泄漏。
+
+真正的问题是：**这个闭包活得比你想的久，并且继续引用着已经不需要的大对象。**
+
+```js
+function attach(element) {
+  const hugeData = createHugeData()
+
+  element.addEventListener("click", () => {
+    console.log(hugeData.length)
+  })
 }
 ```
 
-普通的理解其实是不够的，因为`垃圾回收机制(GC)`其实不止这两个算法，想要更深入地了解`V8垃圾回收机制`，就继续往下看吧！！！
+如果元素被移除，但事件监听器没有解绑，闭包和 `hugeData` 都可能继续可达。解决方式不是“不要用闭包”，而是管理生命周期：
 
-[掘金-20分钟打败了「V8垃圾回收机制」](https://juejin.cn/post/6995706341041897486)
+```js
+const controller = new AbortController()
+element.addEventListener("click", handler, { signal: controller.signal })
+
+controller.abort()
+```
+
+或者及时 `removeEventListener`、清理定时器、取消订阅。
+
+闭包让代码更灵活，代价是你需要知道自己延长了哪些引用的生命周期。
+
+## 最后
+
+闭包不是“函数套函数”的语法游戏，柯里化也不是函数式编程的通行证。
+
+它们真正有价值的地方，是让状态和配置有一个清晰的边界。边界清楚了，闭包会很好用；边界失控了，它才会变成内存和状态问题的来源。

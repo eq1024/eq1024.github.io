@@ -1,118 +1,143 @@
 ---
-title: "JS中如何使用emoji及unicode编码理解"
+title: 为什么 '😊'.length 等于 2
 date: 2023-02-18
-description: "前瞻 回顾第一章: 同一个字符的两种 UTF-8 编码 正文 &#128522; 这是一个笑脸,它的编码如下 Unicode编码：1F60A UTF-8编码：F09F 988A UTF-16编码: D83D DE0A 概念 Unicode 使用四个字节为每个字符编码，UTF 是英"
+description: 从码点、UTF-8、UTF-16 代理对到字素簇，解释为什么字符串长度、截断和 emoji 处理总出问题。
 tags:
   - JavaScript
+  - 计算机基础
+outline: true
 ---
 
-### 前瞻
-[回顾第一章: 同一个字符的两种 UTF-8 编码](https://www.cnblogs.com/EQ1024/p/16551168.html9)
+先看一个很小但很反直觉的例子：
 
-### 正文
-😊
-
-这是一个笑脸,它的编码如下
-
-```
-Unicode编码：1F60A
-UTF-8编码：F09F 988A
-UTF-16编码: D83D DE0A
+```js
+"😊".length // 2
 ```
 
-**概念**
+一个看起来只有一个表情的字符串，长度却是 2。
 
-**Unicode** 使用四个字节为每个字符编码，**UTF** 是英文 Unicode Transformation Format 的缩写，意为把 Unicode 字符转换为某种格式。
+这不是 JavaScript 故意和开发者作对，而是因为“字符”这个词在不同层次上指的不是同一个东西。
 
-UTF-8：变长，1-4 字节，根据码点范围，采用不同字节数
+## 码点、编码和字符串
 
-| Unicode码范围    | UTF-8编码方式                       |
-| :--------------- | :---------------------------------- |
-| U+0000~U+007F    | 0????????                           |
-| U+0080~U+07FF    | 110????? 10??????                   |
-| U+0800~U+FFFF    | 1110???? 10?????? 10??????          |
-| U+10000~U+10FFFF | 11110??? 10?????? 10?????? 10?????? |
+Unicode 给字符分配码点，例如：
 
-**转换例子**：
-
-```
-1 F6 0A  //转16
-
-1 11110110 00001010  //填充
-
-11110??? 10?????? 10?????? 10?????? 
-
-11110000 10011111 10011000 10001010`  //转16进制的utf-8编码
-
-F0 9F 98 8A
+```text
+U+1F60A 😊
+U+0041  A
+U+4E2D  中
 ```
 
+码点是一个抽象编号，不是磁盘上的字节。
 
+UTF-8、UTF-16、UTF-32 是把码点编码成字节的不同方式：
 
-UTF-16：变长，2 或 4 字节，根据码点范围，采用不同字节数。
+- UTF-8 变长，1 到 4 字节。
+- UTF-16 使用 2 字节或 4 字节。
+- UTF-32 固定 4 字节，占用大，实际使用少。
 
-| Unicode范围      | UTF-16编码方式                                               |
-| :--------------- | :----------------------------------------------------------- |
-| U+000~U+FFFF     | 2 Byte存储，编码后等于Unicode值                              |
-| U+10000~U+10FFFF | 4 Byte存储，现将Unicode值减去（0x10000），得到20bit长的值。再将Unicode分为高10位和低10位。UTF-16编码的高位是2 Byte，高10位Unicode范围为0-0x3FF，将Unicode值加上0XD800，得到高位代理（或称为前导代理，存储高位）；低位也是2 Byte，低十位Unicode范围一样为0~0x3FF，将Unicode值加上0xDC00,得到低位代理（或称为后尾代理，存储低位） |
+所以“Unicode 用四个字节编码”是错误的。Unicode 是字符集和码点空间，UTF 才是编码方式。
 
-**转换例子**：
+## 为什么 length 是 2
 
--  `U+0020`，这个值的范围在第一部分，即经过UTF-16编码后，结果仍然为`U+0020`，在内存中的顺序为`00 20`。
--  `U+12345`, 这个值的范围在第二部分，因此需要先减去`0x10000`，得到`0x02345`，拆分成高10位`00 0000 1000`和低10位`11 0100 0101`。根据上面规则加上特定值后，高位代理值为`D808`，低位代理值为`DF45`，最终内存中的顺序为`D8 08 DF 45`。
+JavaScript 字符串按 UTF-16 代码单元计数。基本多文种平面之外的码点需要用代理对表示：
 
-UTF-32：定长，4 字节，浪费空间，没人用。
+```js
+"😊".length        // 2
+"😊".codePointAt(0) // 128522
 
-| 编码范围           | 字节数量 |
-| ------------------ | -------- |
-| U+0000 - U+FFFF    | 2        |
-| U+10000 - U+10FFFF | 4        |
-
-**网址**
-
-[emoji link](https://apps.timwhitlock.info/emoji/tables/unicode)
-
-[unicode link](https://home.unicode.org/)
-
-### 使用
-
-> JS语言采用的是Unicode字符集，utf-16的编码方式
-
-
-
-```ts
-let e = '😊'
-e.length  // 2
-/**
-获取的是浏览器根据unicode`1F60A`进行
-utf-16规则转码后的 编码
-*/
-e[0]  //'\uD83D'
-e[1]  //'\uDE0A'
+"😊"[0] // "\uD83D"
+"😊"[1] // "\uDE0A"
 ```
 
-#### 显示和储存
+`length` 返回的是代码单元数量，不是码点数量，也不是用户感知的字符数量。
 
-```ts
-'😁'.codePointAt()   //128513
+## 正确遍历码点
 
-String.fromCodePoint(128513)  //😁
+用 `for...of` 或展开运算符：
+
+```js
+[... "😊"] // ["😊"]
+Array.from("😊") // ["😊"]
+
+for (const char of "😊") {
+  console.log(char)
+}
 ```
 
+## fromCharCode 和 fromCodePoint
 
-
-#### 区别
-
-> fromCharCode和fromCodePoint区别
-
-fromCharCode只能对不大于`0xFFFF`的码点才有效
-
-```ts
-String.fromCharCode(0x1F60A) //""输出的是一个方框
+```js
+String.fromCharCode(0x1F60A) // 截断后的结果
+String.fromCodePoint(0x1F60A) // "😊"
 ```
 
-es6出现了fromCodePoint
+`fromCharCode` 接收 UTF-16 代码单元，超出 16 位的值会被截断。`fromCodePoint` 接收完整码点。
 
-```ts
-String.fromCodePoint(0x1F60A)//"😁"
+同理，`charCodeAt` 得到的是代码单元，`codePointAt` 才能拿到完整码点。
+
+## 字素簇才是用户眼里的“字符”
+
+即使按码点计算，也不一定符合用户直觉。
+
+```js
+"👨‍👩‍👧‍👦".length          // 多个代码单元
+"👍🏽".length               // 基础表情 + 肤色修饰符
+"🇨🇳".length               // 两个区域指示符
 ```
+
+这些由多个码点组合成的“一个字”，在 Unicode 里叫字素簇（grapheme cluster）。
+
+如果需要按用户感知字符切分，可以使用 `Intl.Segmenter`：
+
+```js
+const segmenter = new Intl.Segmenter("zh", {
+  granularity: "grapheme",
+})
+
+const segments = [...segmenter.segment("👨‍👩‍👧‍👦")]
+console.log(segments.length) // 1
+```
+
+处理昵称、评论、输入框字数时，这一点很重要。直接 slice 可能把 emoji 或代理对截断。
+
+## UTF-8 和 UTF-16 不是一回事
+
+浏览器内部字符串通常以 UTF-16 代码单元为单位暴露给 JavaScript，但网络传输和文件存储常用 UTF-8。
+
+```js
+const bytes = new TextEncoder().encode("😊")
+// Uint8Array(4) [240, 159, 152, 138]
+
+const text = new TextDecoder().decode(bytes)
+// "😊"
+```
+
+UTF-8 编码 `U+1F60A` 是 4 个字节。
+
+如果错误地把 UTF-16 的两个代理项分别当成独立字符去编码，可能得到一种类似 CESU-8 的 6 字节结果，而不是标准 UTF-8。它看起来像“同一个字符的两种编码”，但本质上是编码层次被弄混了。
+
+## 规范化
+
+有些字符可以用不同码点序列表示：
+
+```js
+"é" === "e\u0301" // false
+"é".normalize("NFC") === "e\u0301".normalize("NFC") // true
+```
+
+用户输入、URL、文件名和搜索匹配时，可能需要进行 Unicode 规范化。
+
+## 最后
+
+记住三个层次：
+
+```text
+码点：字符的抽象编号
+代码单元：JavaScript 字符串的计数单位
+字素簇：用户感知的一个字符
+```
+
+看到 `'😊'.length === 2` 时，不要急着说“JavaScript 的 bug”。它只是按代码单元计数。
+
+真正需要处理用户输入时，按字素簇切分，别按代码单元硬切。

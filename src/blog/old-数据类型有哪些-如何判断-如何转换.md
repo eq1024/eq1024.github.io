@@ -1,147 +1,213 @@
 ---
-title: "数据类型有哪些？如何判断？如何转换？"
+title: 判断 JavaScript 类型，别再只背 typeof
 date: 2022-03-06
-description: "数据类型 分为简单类型(基本类型)和复杂类型(引用数据类型) 基本类型：字符串（String）、数字(Number)、布尔(Boolean)、对空（Null）、未定义（Undefined）、Symbol(ES6新增)。 复杂类型：对象(Object)、数组(Array)、函数(F"
+description: 从八种语言类型到 typeof、instanceof、Object.is 和显隐式转换，整理一份真正能用的类型判断笔记。
 tags:
   - JavaScript
   - 计算机基础
+outline: true
 ---
 
-### 数据类型
+`typeof null === "object"` 几乎成了 JavaScript 面试的暗号。
 
-> 分为简单类型(基本类型)和复杂类型(引用数据类型)
+但真正写代码时，类型判断远比背这一条复杂：数组和对象怎么分？跨 iframe 的对象还能用 `instanceof` 吗？`NaN` 为什么连自己都不等于？`==` 到底在什么时候会把人坑哭？
 
-**基本类型**：字符串（String）、数字(Number)、布尔(Boolean)、对空（Null）、未定义（Undefined）、Symbol(ES6新增)。
+这篇文章想把这些边界一次讲清楚。
 
-**复杂类型**：对象(Object)、数组(Array)、函数(Function)。
+## 语言里到底有几种类型
 
-`注意` : Array和Function都是Object的**子类**,所以复杂类型严格意义上只有object一种,使用 instanceof object可以确定.
+JavaScript 有八种语言类型：
 
-```javascript
-console.log(Function instanceof Object);  //true
-console.log(Array instanceof Object);  //true
+- `Undefined`
+- `Null`
+- `Boolean`
+- `Number`
+- `BigInt`
+- `String`
+- `Symbol`
+- `Object`
+
+数组、函数、日期、正则、`Map`、`Set` 都是 `Object` 的不同形态，不是独立的语言类型。
+
+## typeof 能做什么，不能做什么
+
+```js
+typeof undefined      // "undefined"
+typeof true           // "boolean"
+typeof 1              // "number"
+typeof 1n             // "bigint"
+typeof "hello"        // "string"
+typeof Symbol("id")   // "symbol"
+typeof {}             // "object"
+typeof []             // "object"
+typeof function () {} // "function"
+typeof null           // "object"
 ```
 
-Symbol是ES6新的简单数据类型，表示独一无二 
+`typeof null` 返回 `"object"` 是规范保留下来的历史行为。把它解释成“机器码后三位是 000”并不适合当作心智模型，知道这个结果不可靠就够了。
 
-### 数据类型判断
+`typeof` 也不能区分数组和普通对象，更不能区分 `Date`、`Map`、`Set` 这些具体对象。
 
-#### 简单数据
+## 判断数组：Array.isArray
 
-`typyof`可以直接检测简单数据类型，但是**`null`会被识别为`object`**原因是因为：机器码尾号是000的就是object,但是由于null是00000000,所以**错误识别为object**,是语言的bug。
-
-```javascript
-let a = 123
-let b = '456'
-let c = true
-let d = [7, 8, 9]
-let e = { a: 1, b: 2, c: 3 }
-let f = function(){}
-
-console.log(typeof (a));  //number
-console.log(typeof (b));  //string
-console.log(typeof (c));  //boolean
-console.log(typeof (d));  //object
-console.log(typeof (e));  //object
-console.log(typeof (f));  //function
-console.log(typeof (undefined)); // undefined
-console.log(typeof (null));   //object
+```js
+Array.isArray([])        // true
+Array.isArray({})        // false
+Array.isArray(new Set()) // false
 ```
 
-**注意** : `typeof`可以正确判断function类型，也可以使用`instanceof Function`来判断是不是函数,推荐第二种,已达到统一
+它比 `instanceof Array` 更稳，因为它不依赖当前执行上下文里的 `Array` 构造函数。
 
-```javascript
-console.log(typeof (f));  //function
-console.log(f instanceof Function); //true
+## instanceof 看的是原型链
+
+```js
+const date = new Date()
+
+date instanceof Date   // true
+date instanceof Object // true
 ```
 
-#### 复杂数据类型
+`instanceof` 会沿着对象的原型链查找构造函数的 `prototype`。所以它判断的是“原型链上有没有这个构造函数的原型”，不是读 `constructor.name`。
 
-**function**
+跨 iframe 或不同 realm 时，两边的 `Array`、`Object` 构造函数不是同一个，`instanceof` 可能失效。这种场景更适合用 `Array.isArray` 或标签判断。
 
-上面提到,function可以使用typeof正确判断,但为了统一简单和复杂类型的判断方式,建议使用instanceof的方式.
+## 更通用的标签判断
 
-**array**
-
-```javascript
-console.log(d instanceof Array) //true
-console.log(Array.isArray(d)) //true
-```
-
-**object**
-
-当我们使用`instanceof`得到一个object时,还需要通过上面的两个方式来排除它**不是数组或者函数**.
-
-```javascript
-if(e instanceof Object){
-    if(e instanceof Array){console.log('是数组')}
-    if(e instanceof Function){console.log('是函数')}
-    console.log('是对象'）
+```js
+function getTag(value) {
+  return Object.prototype.toString.call(value)
 }
+
+getTag([])        // "[object Array]"
+getTag(null)      // "[object Null]"
+getTag(new Map()) // "[object Map]"
 ```
 
-#### 关于instanceof
+这个方法依赖 `Symbol.toStringTag`，适合做兜底，但不要把它当成唯一的真理。业务代码里优先用更具体的 API：
 
-> instanceof本身是`是谁的实例`的意思，所以可以用来判断是不是某个构造函数的实例
+- 数组：`Array.isArray`
+- `NaN`：`Number.isNaN`
+- 整数：`Number.isInteger`
+- 普通对象：原型是 `Object.prototype` 或 `null`，同时排除数组等
 
-使用**`new`**关键字创建的对象，其实就是实例，也就是说最终都是Object的实例
+## NaN 和 -0
 
-```javascript
-function Person() { };
-console.log(new Person() instanceof Person); //true
-console.log(new Person() instanceof Object); //true
+```js
+NaN === NaN        // false
+Object.is(NaN, NaN) // true
 
-console.log(new Date() instanceof Date;//true
-console.log(new Date() instanceof Object);//true
+0 === -0           // true
+Object.is(0, -0)    // false
 ```
 
-**instanceof**通过在原型链上查找`constructor`来确定是不是某一个的实例，因为原型链的缘故，所以一直往上找，最后就找到`Object`了。上面的Person和Date都是构造函数。
+需要区分 `NaN` 和 `-0` 时，用 `Object.is`。日常判断 `NaN` 更推荐 `Number.isNaN`：
 
-### 数据转换
-
-#### 显式转换
-
-1. Number()：接收一个参数：123，true,false,null,'123'能处理其他均是NaN
-2. parseInt()：两个参数：对象+进制、123，'123','123a'，其他均为NaN;
-3.  parseFloat()：一个参数：123，'123.11', '123.1a',其他均为NaN;
-4.  String()：接收一个参数：接收任何参数相当于+'';
-5.  obj.toString()：接收一个参数：进制
-6.  Boolean()：接收一个参数：''、NaN、null、undefined、0是false,其他均为true;
-
-#### 隐式转换
-
-1. ++/--自增自减
-
-```
-会先使用`number()`处理，在进行增减。
+```js
+Number.isNaN("hello") // false
+Number.isNaN(NaN)     // true
 ```
 
-2. ==
+全局 `isNaN` 会先做类型转换，所以 `isNaN("hello")` 是 `true`，很容易误判。
 
-```
-1.undefined等于null
-2.字符串和数字比较时，字符串转数字
-3.数字为布尔比较时，布尔转数字
-4.字符串和布尔比较时，两者转数字
-```
+## 显式转换
 
-3. / % * - +
+### Number
 
-```
-1.字符串加数字,数字就会转成字符串。
-2.数字减字符串，字符串转成数字。如果字符串不是纯数字就会转成NaN。字符串减数字也一样。两个字符串相减也先转成数字。
-3.乘，除，大于，小于跟减的转换也是一样。
+```js
+Number("")        // 0
+Number(" 42 ")    // 42
+Number("42px")    // NaN
+Number(null)      // 0
+Number(undefined) // NaN
+Number(true)      // 1
 ```
 
-4. 逻辑操作符中的隐式转换规律
+`Number` 是整体转换。只要字符串里有多余字符，就可能得到 `NaN`。
 
-```
-逻辑非（!） 通过Boolean()函数将其操作值转换为布尔值，然后求反。
+`parseInt` 是逐字符解析：
 
-逻辑与（&&）操作符：如果第一个值经过Boolean()函数转换后为true，则返回第二个操作值，否则返回第一个操作值。如果有一个操作值为null这返回null，如果有一个操作值为undefined，则返回undefined，如果有一个值为NaN，则返回NaN。
-
-逻辑或（||）操作符：如果第一个值经过Boolean()函数转换为false，则返回第二个操作值，否则返回第一个操作值。（注：逻辑操作符的运算为短路逻辑运算：前一个条件已经能够得出结果后续条件不再执行！）
-
+```js
+parseInt("42px", 10) // 42
+parseInt("08", 10)   // 8
 ```
 
-需要注意的是NaN==NaN是false的，因为NaN**是指不是一个数**，而并没有指定NaN是啥， 所以两个NaN可能不一样，比如一个是对象，一个是函数。
+它适合“从字符串开头提取整数”，不适合做严格的输入校验。严格校验最好配合正则或表单规则。
+
+### String
+
+```js
+String(42)   // "42"
+String(null) // "null"
+```
+
+模板字符串和 `+ ""` 也会触发字符串转换，但显式 `String()` 更容易读。
+
+### Boolean
+
+这些值会转换成 `false`：
+
+```js
+false
+0
+-0
+0n
+NaN
+""
+null
+undefined
+```
+
+其他值都是 `true`，包括 `[]`、`{}` 和 `"0"`。不要用“看起来空不空”来判断布尔值。
+
+## 隐式转换
+
+`+` 最容易出问题：
+
+```js
+1 + "2"   // "12"
+1 - "2"   // -1
+1 + true  // 2
+[] + []   // ""
+[] + {}   // "[object Object]"
+```
+
+`+` 只要遇到字符串或能被转成字符串的对象，就可能做拼接。`-`、`*`、`/` 则会倾向数字转换。
+
+`==` 也有一套复杂的转换规则：
+
+```js
+null == undefined // true
+0 == ""           // true
+0 == false        // true
+"" == false       // true
+```
+
+这就是为什么现代代码通常要求用 `===`。不是 `==` 一定错，而是你需要为每一次使用解释清楚转换过程，成本太高。
+
+## BigInt 和 Symbol 的边界
+
+`BigInt` 不能和 `Number` 直接混合运算：
+
+```js
+1n + 1 // TypeError
+```
+
+需要显式转换，但要小心精度。
+
+`Symbol` 不会出现在普通的字符串拼接和 `JSON.stringify` 里：
+
+```js
+JSON.stringify({ id: Symbol("id") }) // "{}"
+```
+
+`BigInt` 也不能直接 `JSON.stringify`，需要自定义序列化。
+
+## 我现在的习惯
+
+- 输入边界先校验类型，不要等到业务深处再猜。
+- 数组用 `Array.isArray`，`NaN` 用 `Number.isNaN`，值比较优先 `Object.is`。
+- 不用 `instanceof` 判断跨 realm 的对象。
+- 不写依赖隐式转换的“聪明代码”。
+- 遇到 `typeof` 的结果，先想清楚它是语言行为，还是当前运行环境的实现细节。
+
+类型判断本身不难，难的是知道哪个判断在什么边界下会失效。

@@ -1,180 +1,134 @@
 ---
-title: "浏览器复制、剪切、粘贴事件简单操作示例"
+title: 剪贴板不是只有 copy 和 paste
 date: 2022-02-26
-description: "更多参考:点这里 复制、剪切、粘贴事件： copy 发生复制操作时触发; cut 发生剪切操作时触发; paste 发生粘贴操作时触发; 每个事件都有一个 before 事件对应：beforecopy、beforecut、beforepaste; 这几个 before 一般不怎么"
+description: 从 copy/cut/paste 事件到 navigator.clipboard、图片粘贴和权限边界，整理现代浏览器的剪贴板实践。
 tags:
   - JavaScript
   - 浏览器
+outline: true
 ---
 
-> 更多参考:[点这里](https://blog.csdn.net/fesfsefgs/article/details/111875639)
+复制粘贴看起来是浏览器里最普通的功能之一。
 
-### 复制、剪切、粘贴事件：
+但真正做起来，问题很快就来了：为什么 `navigator.clipboard` 在某些页面不可用？为什么粘贴图片拿不到文件？为什么 `copy` 事件里改完剪贴板还要调用 `preventDefault`？
 
-- copy 发生复制操作时触发;
-- cut 发生剪切操作时触发;
-- paste 发生粘贴操作时触发;
+这篇文章把常见场景和边界整理一遍。
 
-每个事件都有一个 before 事件对应：`beforecopy、beforecut、beforepaste;`
-这几个 before 一般不怎么用，所以我们把注意力放在三个事件就可以了。
+## 三个事件
 
-### copy复制操作:
-
-**copy事件使用示例：**
-
-```html
-<body>
-	gggwgzgf
-</body>
-<script type="text/javascript">
-	document.body.oncopy = e => {
-	  // 监听全局复制 做点什么
-	  console.log(e)
-	};
-</script>
+```js
+document.addEventListener("copy", event => {})
+document.addEventListener("cut", event => {})
+document.addEventListener("paste", event => {})
 ```
 
-<img src="https://gitee.com/zhouj889/pih/raw/master/NewPic/202202261713501.gif" alt="在这里插入图片描述" style="zoom:50%;" />
+- `copy`：用户或脚本触发复制。
+- `cut`：用户触发剪切。
+- `paste`：用户触发粘贴。
 
-我们可以看到事件对象中的属性：
+事件对象的 `clipboardData` 是同步访问剪贴板的入口：
 
-![在这里插入图片描述](https://gitee.com/zhouj889/pih/raw/master/NewPic/202202261715173.png)
-
-我们主要研究的是里面的`clipboardData`属性对象
-
-clipboardData 对象: 用于访问以及修改剪贴板中的数据
-clipboardData对象中有两个方法：
-
-**setData():**常配合copy事件使用，用于设置到剪贴板中的值
-
-**getData():**常配合paste事件使用，用于获取设置到剪贴板中的值
-
-> 不同浏览器，所属的对象不同：在 IE
-> 中这个对象是window对象的属性，在Chrome、Safari和Firefox中，这个对象是相应的event对象的属性。所以我们在使用的时候，需要做一下如下兼容:
-
-```javascript
-document.body.oncopy = e => {
-  let clipboardData = e.clipboardData || window.clipboardData;
-  // 获取clipboardData对象 + do something
-};
+```js
+document.addEventListener("copy", event => {
+  console.log(event.clipboardData?.getData("text/plain"))
+})
 ```
 
-**copy配合getSelection实现复制某段文本**
+`beforecopy`、`beforecut`、`beforepaste` 是旧实现，现代项目不建议依赖。
 
-```javascript
-<body>
-		gggwgzgf
-	</body>
-	<script type="text/javascript">
-		document.body.oncopy = e => {
-			console.log(window.getSelection().toString())
-			let copyMsg = window.getSelection().toString()
-			//把值设置到剪贴板中，方便paste事件触发去拿
-			e.clipboardData.setData("Text", copyMsg);
-		};
-	</script>
+## 复制时写入文本
+
+```js
+document.addEventListener("copy", event => {
+  const text = window.getSelection()?.toString()
+
+  if (!text) return
+
+  event.clipboardData.setData("text/plain", text)
+  event.preventDefault()
+})
 ```
 
-<img src="https://gitee.com/zhouj889/pih/raw/master/NewPic/202202261717854.gif" alt="在这里插入图片描述" style="zoom:50%;" />
+如果自己不调用 `setData`，浏览器会使用默认复制行为。调用 `preventDefault` 是为了接管这次复制，避免默认内容覆盖你写入的内容。
 
-**注意：**`window.getSelection().toString()`我是调用`toString()`方法转成文本的，如果不调用这个方法，直接通过`window.getSelection()`取到值存到剪贴板会有出奇的效果，会连同效果一起粘贴(比如html格式的,会隐性地把`<body>`什么都复制进去)，需要配合paste事件
+实际项目里通常不会全局拦截 `copy`，而是给复制按钮绑定明确的行为。
 
-### paste粘贴事件
+## 现代 API：navigator.clipboard
 
-```html
-<body>
-		gggwgzgf
-		<input placeholder="这里存放粘贴操作的值" />
-	</body>
-	<script type="text/javascript">
-		document.body.oncopy = e => {
-			console.log(window.getSelection().toString())
-			let copyMsg = window.getSelection().toString()
-			e.clipboardData.setData("Text", copyMsg);
-		};
-		
-		document.body.onpaste=function(e){
-				var data = e.clipboardData.getData("Text")
-				document.querySelector("input").value = data
-			}
-	</script>
+```js
+await navigator.clipboard.writeText("hello")
 ```
 
-<img src="https://gitee.com/zhouj889/pih/raw/master/NewPic/202202261720978.gif" alt="在这里插入图片描述" style="zoom:50%;" />
+它比 `document.execCommand("copy")` 更现代，但有几个前提：
 
-**通过patse事件获取剪切板中的图片：**
+- 页面处于安全上下文，通常是 HTTPS 或 localhost。
+- 读取剪贴板通常需要用户手势或权限。
+- 不同浏览器对权限和焦点状态的要求不完全一样。
 
-```html
-<script type="text/javascript">
-		document.addEventListener('paste', function(event) {
-			var items = (event.clipboardData && event.clipboardData.items) || [];
-			var file = null;
-			if(items && items.length) {
-				for(var i = 0; i < items.length; i++) {
-					if(items[i].type.indexOf('image') !== -1) {
-						file = items[i].getAsFile();
-						break;
-					}
-				}
-			}
-			console.log(file)
-		});
-</script>
+读取文本：
+
+```js
+const text = await navigator.clipboard.readText()
 ```
 
-**解释：** 当粘贴事件触发时遍历剪切版对象`（clipboardData）`中的所有`items`，找到类型为图片的`item`并调用`getAsFile`方法得到文件对象
+这类 API 是异步的，适合按钮点击，不适合在没有用户交互的页面加载阶段直接调用。
 
-**拿到`file` 对象后我们有几种选择：**
+## 粘贴图片
 
-1. 通过`fileReader`得到文件对象的`base64`字符串
+```js
+document.addEventListener("paste", event => {
+  const items = [...(event.clipboardData?.items ?? [])]
+  const imageItem = items.find(item => item.type.startsWith("image/"))
 
-```javascript
-var reader = new FileReader();
-reader.onload = function(e){
-// 通过e.target.result取到base64然后上传
-// 作为src设到image标签上预览
+  if (!imageItem) return
+
+  const file = imageItem.getAsFile()
+  if (!file) return
+
+  const url = URL.createObjectURL(file)
+  preview.src = url
+})
+```
+
+拿到 `File` 后有三条常见路径：
+
+```js
+// 上传
+const formData = new FormData()
+formData.append("file", file)
+
+// 预览
+const url = URL.createObjectURL(file)
+
+// 读取为 Data URL
+const reader = new FileReader()
+reader.readAsDataURL(file)
+```
+
+如果使用 `URL.createObjectURL`，记得在图片不再需要时调用 `URL.revokeObjectURL(url)`，否则会一直占用内存。
+
+## 为什么有时拿不到图片
+
+粘贴事件里的数据类型取决于来源：
+
+- 从网页复制图片，可能只有 URL 或 HTML 片段。
+- 从系统截图工具复制，可能是 `image/png`。
+- 从本地文件管理器复制，有些浏览器只提供文件引用，不提供图片二进制。
+
+不要假设所有“图片粘贴”都能拿到 `File`。先遍历 `items` 看类型，再决定走文件上传、URL 预览还是提示用户。
+
+## 权限和降级
+
+```js
+if (!navigator.clipboard) {
+  // 回退到旧的复制方案，或者直接提示用户手动复制
 }
-reader.readAsDataURL(file); //此处的file为上面得到的文件对象```
 ```
 
-2. 通过`formData`文件对象转换为二进制数据
+不要为了兼容极旧浏览器把主流程写得非常复杂。先保证现代浏览器可用，再给一个明确的降级提示，通常比隐藏错误更好。
 
-```javascript
-var formData = new FormData();
-formData.append('file', file);
-```
+## 最后
 
-3. 通过 `URL.createObjectURL`转成url地址预览
+剪贴板的核心不是记住几个事件，而是分清同步事件和异步 API、用户手势和权限、文本和二进制。
 
-```javascript
-var blobUrl=URL.createObjectURL(file)
-```
-
-**示例代码：**
-
-```html
-<body>
-		<img src="" id="imgTest" />
-	</body>
-	<script type="text/javascript">
-		document.addEventListener('paste', function(event) {
-			var items = (event.clipboardData && event.clipboardData.items) || [];
-			var file = null;
-			if(items && items.length) {
-				for(var i = 0; i < items.length; i++) {
-					if(items[i].type.indexOf('image') !== -1) {
-						file = items[i].getAsFile();
-						break;
-					}
-				}
-			}
-			var blobUrl = URL.createObjectURL(file);
-			document.getElementById("imgTest").src = blobUrl;
-		});
-	</script>
-```
-
-<img src="https://gitee.com/zhouj889/pih/raw/master/NewPic/202202261722831.gif" alt="在这里插入图片描述" style="zoom:50%;" />
-
-**局限性：**
-`对于qq，微信等的截图或者按print screen得到的截图，还有任意网页的右击复制图片都能完美支持`，但是，对于电脑本地图片文件的复制没办法从剪切版获取到
+复制粘贴是用户已经形成肌肉记忆的操作。让它在边界情况下仍然可预期，比多支持一个旧 API 更重要。

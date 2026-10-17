@@ -1,42 +1,126 @@
 ---
-title: "React  StrictMode 生命周期为什么会执行两次？"
+title: React StrictMode 为什么在开发环境执行两次
 date: 2022-12-13
-description: "什么是 React.StrictMode? React.StrictMode 是在 2018 年的 16.3.0 版本中引入的组件。一开始，它只用在类组件中，而在 16.8.0 中，它对 hook 同样适用。 就像在版本说明中提及的一样： React.StrictMode 是帮助"
+description: 从渲染期双调用、Effect 的挂载卸载重挂载到并发渲染，解释 StrictMode 想暴露什么问题。
 tags:
   - React
+outline: true
 ---
 
-### 什么是 React.StrictMode?
-React.StrictMode 是在 2018 年的 16.3.0 版本中引入的组件。一开始，它只用在类组件中，而在 16.8.0 中，它对 hook 同样适用。
-就像在版本说明中提及的一样：
+第一次看到 `StrictMode` 下组件渲染两次、接口请求两次、`useEffect` 执行两次时，很多人的第一反应是：
 
-React.StrictMode 是帮助应用适应异步渲染的组件
+> 是不是 React 出 bug 了？
 
-所以它应该用来帮助工程师避免常见的错误，并使他们的 React 应用抛弃过时的 API，从而逐步升级。
-这些提示对于更好地调试是有帮助的，因为这个库正在向异步渲染时代迈进，所以大的改动时时发生。
-很有用，对吧？
-### 为什么会渲染两次呢?
-我们从使用 React.StrictMode 中获得的好处之一是，它帮助我们检测到渲染期生命周期的预期之外的副作用。
-这些生命周期有：
+不是。`StrictMode` 是刻意这样做的，而且只在开发环境生效。
 
-constructor
-componentWillMount (或者 UNSAFE_componentWillMount)
-componentWillReceiveProps (或者 UNSAFE_componentWillReceiveProps)
-componentWillUpdate (或者 UNSAFE_componentWillUpdate)
-getDerivedStateFromProps
-shouldComponentUpdate
-render
-setState 更新函数 (第一个参数)
+它的目的不是让代码变慢，而是提前暴露那些在并发渲染、组件重挂载和未来特性下会出问题的写法。
 
-所有这些方法都被调用不止一次，所以避免副作用是十分重要的。如果我们无视这个原则，就有可能造成状态不一致问题或者内存泄漏。
-React.StrictMode 不能马上检测到副作用，但是它可以通过故意调用一些关键函数两次，来帮助我们发现副作用。
-这些函数有:
+## StrictMode 在检查什么
 
-类组件 constructor、render 以及 shouldComponentUpdate 方法
-类组件静态 getDerivedStateFromProps 方法
-方法组件的方法体
-状态更新函数 (setState 的第一个参数)
-传给 useState、useMemo、或 useReducer 的函数
+React 的渲染阶段应该是一个纯计算过程：
 
-这个行为肯定对性能有一些影响，但我们不应该担心，因为它只在开发而不是生产环境中发生。
-这就是我们只有在开发环境下使用带 React.useState 的组件函数，才可以成功复现渲染两次的原因。
+```jsx
+function User({ user }) {
+  return <div>{user.name}</div>
+}
+```
+
+给定相同的 props 和 state，应该得到相同的结果，不应该在 render 里发请求、改全局变量、写 DOM 或注册副作用。
+
+但现实代码经常不纯：
+
+```jsx
+function BadComponent({ id }) {
+  analytics.track("view", id) // 渲染期副作用
+  return <div>{id}</div>
+}
+```
+
+如果组件被重复执行，这段代码就会重复上报。
+
+StrictMode 通过故意重复调用一些函数，让这类问题在开发阶段暴露出来。
+
+## 哪些东西会执行两次
+
+在 React 18 的开发模式下，常见的双调用包括：
+
+- 函数组件体
+- `useState` 的初始化函数
+- `useMemo` / `useReducer` 的计算函数
+- 类组件的 `constructor`、`render`、`shouldComponentUpdate`
+- `getDerivedStateFromProps`
+- Effect 的挂载、清理、再挂载
+
+注意最后一条：Effect 不是简单执行两次，而是经历：
+
+```text
+mount effect
+cleanup effect
+mount effect again
+```
+
+这是为了检查你的 Effect 是否正确清理了订阅、定时器、事件监听器和请求。
+
+## 为什么 Effect 要模拟卸载
+
+React 正在为并发特性和未来的 Activity 组件做准备。组件可能被挂载、隐藏、恢复，Effect 需要能承受这种生命周期。
+
+如果一个 Effect 只能挂载不能清理，它在真实的重挂载场景里就会泄漏。
+
+```jsx
+useEffect(() => {
+  const controller = new AbortController()
+
+  fetch("/api/data", { signal: controller.signal })
+    .then(res => res.json())
+    .then(setData)
+
+  return () => controller.abort()
+}, [])
+```
+
+这个 Effect 在 StrictMode 下会请求两次，但第一次请求会被 abort。它暴露的是“你有没有正确清理”，而不是“React 想浪费你的网络请求”。
+
+## 不要用“去掉 StrictMode”解决
+
+移除 `StrictMode` 只是把问题藏起来。生产环境可能不会双调用，但并发渲染、快速切换、组件重挂载仍然可能发生。
+
+更合理的处理是：
+
+- 保持 render 纯净，不在渲染期发请求或写全局状态。
+- Effect 必须有清理逻辑。
+- 订阅、定时器、事件监听器、WebSocket 都要能取消。
+- 不要依赖“组件只会挂载一次”的假设。
+- 用 `ref` 保存跨渲染的稳定实例，而不是在 render 里创建副作用。
+
+## 接口为什么还是请求了两次
+
+如果 Effect 没有 cleanup，或者请求库没有取消机制，开发环境确实会发两次请求。
+
+这不一定说明代码有错，但你需要确认：
+
+- 第二次请求是否会覆盖第一次的结果。
+- 第一次请求是否已经取消。
+- 服务端是否幂等。
+- 是否存在重复创建资源的问题。
+
+对于查询类请求，可以用缓存库或请求去重；对于提交类请求，不要把它放在无法清理的 Effect 里。
+
+## 生产环境会发生吗
+
+StrictMode 的双调用只在开发环境启用。生产构建不会因为这个特性故意执行两次。
+
+但生产环境仍然可能有：
+
+- 并发渲染导致 render 被丢弃和重试
+- 组件卸载和重新挂载
+- 用户快速切换路由
+- Suspense、过渡和缓存机制
+
+所以 StrictMode 检查的是代码是否能在这些情况下保持正确，而不是仅仅制造一个开发环境的怪现象。
+
+## 最后
+
+StrictMode 不是在惩罚你，而是在提前演练更复杂的生命周期。
+
+把 render 写成纯函数，把 Effect 写成可清理的同步逻辑，双调用就不再是问题，而是一种有用的检查。

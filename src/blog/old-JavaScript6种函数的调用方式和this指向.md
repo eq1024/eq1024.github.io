@@ -1,371 +1,198 @@
 ---
-title: "【JavaScript】6种函数的调用方式和this指向"
+title: this 不是作用域，它看的是调用方式
 date: 2021-01-20
-description: "六种调用函数的方法 普通函数 function fn1(){ log(1); } 调用 : fn1(); this指向 : window 对象函数 var obj={ a : 0, b : 1, fn2:function(){ log(2); } } 调用 : obj.fn2()"
+description: 用调用点而不是“六种函数写法”理解 this：默认绑定、隐式绑定、显式绑定、new 和箭头函数。
 tags:
   - JavaScript
   - 计算机基础
+outline: true
 ---
 
-## 六种调用函数的方法
+我早年学 `this` 时，背过一份“六种函数调用方式”的清单：
 
-### 普通函数
-
+```text
+普通函数
+对象方法
+构造函数
+事件函数
+定时器
+立即执行函数
 ```
-function fn1(){
-log(1);
-}
-```
-`调用 :` fn1();
-`this指向 :` window
 
+清单本身没错，但它容易让人以为 `this` 和函数写法绑定。真正决定 `this` 的，是**函数被调用时的位置和方式**。
 
-### 对象函数
-```
-var obj={ 
-a : 0,
-b : 1,
-fn2:function(){
-log(2);
-}
-}
-```
-`调用 :` obj.fn2();
-`this指向 :` 该方法所属对象 即此处的`obj`
+## this 不是作用域
 
+作用域决定变量从哪里找，`this` 是当前调用上下文里的一个值。
 
-### 构造函数
-```
-function fn3(uname,uage){
-  this.uname=uname;
-  this.uage=uage;
-  this.log=function(){log(3)};
+```js
+const user = {
+  name: "Ada",
+  greet() {
+    console.log(this.name)
+  },
 }
 
-fn3.prototype.sing=function(){
-      console.log(this);
+user.greet() // "Ada"
+```
+
+这里 `this` 指向 `user`，不是因为 `greet` 定义在 `user` 里，而是因为调用形式是 `user.greet()`。
+
+## 默认绑定
+
+独立调用函数：
+
+```js
+function show() {
+  console.log(this)
 }
-```
-`调用 :` var fn = new fn3('参数','参数')
-`this指向 :` 实例对象,即此处的`fn`,值得注意的是,构造函数的`原型对象`的`this`也是指向`实例对象`的
 
-
-### 事件函数
+show()
 ```
-btn.onclick=function fn1(){
-log(4);
+
+在非严格模式下，`this` 通常指向全局对象；在严格模式或 ES Module 中，`this` 是 `undefined`。
+
+不要依赖全局对象上的 `this`。现代代码应该明确写出依赖的上下文。
+
+## 隐式绑定
+
+通过对象调用：
+
+```js
+const person = {
+  name: "Ada",
+  greet() {
+    console.log(this.name)
+  },
 }
+
+person.greet()
 ```
-`调用 :` 点击/ele.click()
-`this指向 :` 绑定事件的对象,即此处`btn`
 
-### 定时函数
+`this` 指向 `person`。
+
+但把方法取出来再调用，绑定就丢了：
+
+```js
+const greet = person.greet
+greet() // 默认绑定
 ```
-setTimeout=(function fn1(){
-log(5);
-},500)
-```
-`调用 :` 自动调用
-`this指向 :` window
 
+这是 React 事件处理、回调注册和定时器里最常见的 `this` 问题。
 
-### 立即执行
-```
-(function fn1(){
-log(6);
-})()
-```
-`调用 :` 自动执行
-`this指向 :` window
+## 显式绑定
 
-## this指向问题详解
+`call`、`apply`、`bind` 可以指定 `this`：
 
-> #### 看一道题
-
-```javascript
-var number = 5;
-var obj = {
-    number: 3,
-    fn1: (function () {
-        var number;
-        this.number *= 2;
-        number = number * 2;
-        number = 3;
-        return function () {
-            var num = this.number;
-            this.number *= 2;
-            console.log(num);
-            number *= 3;
-            console.log(number);
-        }
-    })()
+```js
+function greet() {
+  console.log(this.name)
 }
-var fn1 = obj.fn1;
-fn1.call(null);
-obj.fn1();
-console.log(window.number);
+
+const person = { name: "Ada" }
+
+greet.call(person)  // 立即执行
+greet.apply(person) // 立即执行，参数用数组
+
+const bound = greet.bind(person)
+bound() // 返回新函数，之后执行
 ```
 
-### this是什么
+`bind` 适合把方法作为回调传出去，同时保留上下文。
 
-> this**不是指向自身**！this 就是一个**指针**，指向**调用函数**的**对象**。
+## new 绑定
 
-### 默认绑定
-
-默认绑定，在不能应用其它绑定规则时使用的默认规则，通常是独立函数调用。
-
-```javascript
-function sayHi(){
-    console.log('Hello,', this.name);
+```js
+function Person(name) {
+  this.name = name
 }
-var name = 'YvetteLau';
-sayHi();
-复制代码
+
+const person = new Person("Ada")
 ```
 
-在调用Hi()时，应用了默认绑定，this指向全局对象（非严格模式下），严格模式下，this指向undefined，undefined上没有this对象，会抛出错误。
+`new` 大致做了几件事：
 
-### 隐式绑定
+1. 创建一个新对象。
+2. 让新对象的内部原型指向 `Person.prototype`。
+3. 以新对象为 `this` 执行构造函数。
+4. 如果构造函数返回对象，就使用返回对象；否则返回新对象。
 
-函数的调用是在某个对象上触发的，即调用位置上存在上下文对象。典型的形式为 XXX.fun().我们来看一段代码：
-
-```
-function sayHi(){
-    console.log('Hello,', this.name);
+```js
+function A() {
+  this.value = 1
+  return { value: 2 }
 }
-var person = {
-    name: 'YvetteLau',
-    sayHi: sayHi
-}
-var name = 'Wiliam';
-person.sayHi();
-复制代码
+
+new A().value // 2
 ```
 
-打印的结果是 Hello,YvetteLau.
+返回原始值时不会覆盖新对象：
 
-```javascript
-person1.friend.sayHi();
+```js
+function B() {
+  this.value = 1
+  return 2
+}
+
+new B().value // 1
 ```
 
-`注意`对象属性链中只有最后一层会影响到调用位置，不管有多少层，在判断this的时候，我们只关注最后一层，即此处的friend。
+## 箭头函数没有自己的 this
 
-**特殊情况**
-
-```javascript
-var name='Wiliam';
-function sayHi(){
-    console.log('Hello,', this.name);
-}
-var person2 = {
-    name: 'Christina',
-    sayHi: sayHi
-}
-setTimeout(person2.sayHi,100); // Hello, Wiliam
-```
-
-我们知道`setTimeout`是由`Window`调用，也就是说this是**默认绑定**，但是执行的时候执行的应该是`person2.sayHi`，也就是说，`sayHi`的方法是隐式绑定，`this`应该是指向`person2`的，但实际上是指向`Window`的，因为`setTimeout`会默认把需要执行的函数，也就是`setTimeout`的第一个参数，直接当做一个整体，直接去执行他，所以执行的对象是`Window`。上面的只关注最后一层方法在这里是不适用的，这种现象我们成为**绑定丢失**。
-
-**绑定丢失：**this不再绑定在方法的最后一层对象上，而是在其他对象上直接执行，跳过最后一层对象。
-
-### 显式绑定
-
-> 就是通过call,apply,bind的方式，显式的指定this所指向的对象
-
-call和apply的作用一样，只是传参方式不同。call和apply都会执行对应的函数，而bind方法不会。
-
-```
-function sayHi(){
-    console.log('Hello,', this.name);
-}
-var person = {
-    name: 'YvetteLau',
-    sayHi: sayHi
-}
-var name = 'Wiliam';
-var Hi = person.sayHi;
-Hi.call(person); //Hi.apply(person)
-复制代码
-```
-
-输出的结果为: Hello, YvetteLau. 因为使用硬绑定明确将this绑定在了person上。
-
-**特殊情况**
-
-和隐式绑定一样，也会出现**绑定丢失**的情况。
-
-```javascript
-function sayHi(){
-    console.log('Hello,', this.name);
-}
-var person = {
-    name: 'YvetteLau',
-    sayHi: sayHi
-}
-var name = 'Wiliam';
-var Hi = function(fn) {
-    fn.call(this);
-}
-Hi.call(person, person.sayHi);
-复制代码
-```
-
-此时，输出的结果为: Hello, YvetteLau，因为person被绑定到Hi函数中的this上，fn又将这个对象绑定给了sayHi的函数。这时，sayHi中的this指向的就是person对象。
-
-### new 绑定
-
-> 使用new来调用函数，会自动执行下面的操作：
-
-1. 创建一个空对象，构造函数中的this指向这个空对象(CO.call(obj);)
-2. 这个新对象被执行 [[原型]] 连接，将这个空对象的\__proto__成员指向了构造函数对象的prototype成员对象
-3. 执行构造函数方法，属性和方法被添加到this引用的对象中
-4. 如果构造函数中没有返回其它对象(是否使用了return)，那么返回this，即创建的这个的新对象（下面例子），否则，返回构造函数中返回的对象。
-
-```javascript
-function fn()  {  this.user = '二柒';  return {};  }
-function fn1()  {  this.user = '二柒';    }
-var a = new fn;  
-var b = new fn1;  
-console.log(a); // {}
-console.log(b); // {user = '二柒'}
-```
-
-
-
-### 箭头函数
-
-箭头函数是ES6中新增的，它和普通函数有一些区别，箭头函数没有自己的this，它的this继承于外层代码库中的this。箭头函数在使用时，需要注意以下几点:
-
-（1）函数体内的this对象，继承的是外层代码块的this。
-
-（2）不可以当作构造函数，也就是说，不可以使用new命令，否则会抛出一个错误。
-
-（3）不可以使用arguments对象，该对象在函数体内不存在。如果要用，可以用 rest 参数代替。
-
-（4）不可以使用yield命令，因此箭头函数不能用作 Generator 函数。
-
-（5）箭头函数没有自己的this，所以不能用call()、apply()、bind()这些方法去改变this的指向.
-
-```javascript
-var obj = {
-    hi: function(){
-        console.log(this);
-        return ()=>{
-            console.log(this);
-        }
-    },
-    sayHi: function(){
-        return function() {
-            console.log(this);
-            return ()=>{
-                console.log(this);
-            }
-        }
-    },
-    say: ()=>{
-        console.log(this);
+```js
+const obj = {
+  name: "Ada",
+  greet() {
+    const inner = () => {
+      console.log(this.name)
     }
+    inner()
+  },
 }
-let hi = obj.hi();  //输出obj对象
-hi();               //输出obj对象
-let sayHi = obj.sayHi();
-let fun1 = sayHi(); //输出window
-fun1();             //输出window
-obj.say();          //输出window
+
+obj.greet() // "Ada"
 ```
 
-我们来分析一下上面的执行结果：
+箭头函数不会创建自己的 `this`，它捕获定义时外层函数的 `this`。
 
-1. obj.hi(); 对应了this的隐式绑定规则，this绑定在obj上，所以输出obj，很好理解。
-2. hi(); 这一步执行的就是箭头函数，箭头函数继承上一个代码库的this，刚刚我们得出上一层的this是obj，显然这里的this就是obj.
-3. 执行sayHi();这一步也很好理解，我们前面说过这种隐式绑定丢失的情况，这个时候this执行的是默认绑定，this指向的是全局对象window.
-4. fun1(); 这一步执行的是箭头函数，如果按照之前的理解，this指向的是箭头函数定义时所在的对象，那么这儿显然是说不通。OK，按照箭头函数的this是继承于外层代码库的this就很好理解了。外层代码库我们刚刚分析了，this指向的是window，因此这儿的输出结果是window.
-5. obj.say(); 执行的是箭头函数，当前的代码块obj中是不存在this的，只能往上找，就找到了全局的this，指向的是window.
+所以箭头函数不能当构造函数，也没有自己的 `arguments`。不要用 `call` / `apply` / `bind` 去改变箭头函数的 `this`，它不会生效。
 
-> #### 例题解答
+## 事件和定时器
 
-```
-var number = 5;
-var obj = {
-    number: 3,
-    fn: (function () {
-        var number;
-        this.number *= 2;
-        number = number * 2;
-        number = 3;
-        return function () {
-            var num = this.number;
-            this.number *= 2;
-            console.log(num);
-            number *= 3;
-            console.log(number);
-        }
-    })()
-}
-var myFun = obj.fn;
-myFun.call(null);
-obj.fn();
-console.log(window.number);
-复制代码
+普通函数作为事件监听器：
+
+```js
+button.addEventListener("click", function () {
+  console.log(this) // button
+})
 ```
 
-我们来分析一下，这段代码的执行过程。
+这里的 `this` 指向绑定监听器的元素，通常是 `currentTarget`。如果改成箭头函数，`this` 会来自外层。
 
-1. 在定义obj的时候，fn对应的闭包就执行了，返回其中的函数，执行闭包中代码时，显然应用不了new绑定(没有出现new 关键字)，硬绑定也没有(没有出现call,apply,bind关键字),隐式绑定有没有？很显然没有，如果没有XX.fn()，那么可以肯定没有应用隐式绑定，所以这里应用的就是默认绑定了，非严格模式下this绑定到了window上(浏览器执行环境)。【这里很容易被迷惑的就是以为this指向的是obj，一定要注意，除非是箭头函数，否则this跟词法作用域是两回事，一定要牢记在心】
+定时器：
 
-```
-window.number * = 2; //window.number的值是10(var number定义的全局变量是挂在window上的)
-
-number = number * 2; //number的值是NaN;注意我们这边定义了一个number，但是没有赋值，number的值是undefined;Number(undefined)->NaN
-
-number = 3;          //number的值为3
-复制代码
+```js
+setTimeout(function () {
+  console.log(this)
+}, 0)
 ```
 
-1. myFun.call(null);我们前面说了，call的第一个参数传null，调用的是默认绑定;
+不同宿主环境对这里的 `this` 处理不同。浏览器非严格模式下通常是全局对象，Node.js 中不是同一个东西。
 
-```
-fn: function(){
-    var num = this.number;
-    this.number *= 2;
-    console.log(num);
-    number *= 3;
-    console.log(number);
-}
-复制代码
-```
+不要在这里靠猜。需要上下文时，用 `bind` 或箭头函数明确捕获。
 
-执行时:
+## 一张判断表
 
-```
-var num = this.number; //num=10; 此时this指向的是window
-this.number * = 2;     //window.number = 20
-console.log(num);      //输出结果为10
-number *= 3;           //number=9; 这个number对应的闭包中的number;闭包中的number的是3
-console.log(number);   //输出的结果是9
-复制代码
-```
+| 调用方式 | this |
+|---|---|
+| `fn()` | 非严格模式为全局对象，严格模式为 undefined |
+| `obj.fn()` | `obj` |
+| `fn.call(obj)` / `fn.apply(obj)` | `obj` |
+| `new Fn()` | 新创建的实例 |
+| 箭头函数 | 外层函数的 this |
 
-1. obj.fn();应用了隐式绑定，fn中的this对应的是obj.
+## 最后
 
-```
-var num = this.number;//num = 3;此时this指向的是obj
-this.number *= 2;     //obj.number = 6;
-console.log(num);     //输出结果为3;
-number *= 3;          //number=27;这个number对应的闭包中的number;闭包中的number的此时是9
-console.log(number);  //输出的结果是27
-复制代码
-```
+`this` 不是“函数内部的变量”，也不是词法作用域的一部分。它由调用点决定，箭头函数是例外。
 
-1. 最后一步console.log(window.number);输出的结果是20
-
-因此组中结果为:
-
-```
-10
-9
-3
-27
-20
-复制代码
-```
+当你看到 `this` 时，先找调用表达式，再看是否用了 `call` / `apply` / `bind`，最后看是不是箭头函数。按这个顺序，大多数题都不需要背。
